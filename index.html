@@ -63,7 +63,7 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .schedrow .r1{display:flex; gap:6px; align-items:center; margin-bottom:6px;}
 .schedrow .day{font-weight:800; font-size:13px; min-width:34px;}
 .schedrow select,.schedrow input{padding:6px 8px; border:1px solid var(--border); border-radius:8px; font-size:13px;}
-.schedrow input.nm{flex:1; min-width:0;}
+.schedrow select.nm{flex:1; min-width:0;}
 .schedrow .r2{display:flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); padding-left:40px;}
 .schedrow .exbtn{border:1px dashed var(--border); background:none; color:var(--teal); border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer;}
 .schedrow input.cmin{width:52px; text-align:center;}
@@ -210,6 +210,15 @@ function presetOptionsHtml(sc){
   return groups.map(g=>`<optgroup label="${g.label}">`+
     g.items.map(p=>`<option value="${p.key}" ${sc.name===p.name?'selected':''}>${p.name}</option>`).join('')+
     `</optgroup>`).join('');
+}
+/* 部位下拉即当天名称：匹配预设时选中预设，否则显示自定义 */
+function presetSelectHtml(d, sc){
+  const matched = STRENGTH_PRESETS.some(p=>p.name===sc.name);
+  let first='';
+  if(!matched) first = sc.type==='rest'
+    ? '<option value="" selected>💪 选无氧部位…</option>'
+    : `<option value="" selected disabled>✏️ ${sc.name}（自定义）</option>`;
+  return `<select class="nm" onchange="applyPreset(${d},this.value)">${first}${presetOptionsHtml(sc)}</select>`;
 }
 function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
 const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼机 Stair Climber','椭圆机 Elliptical','HIIT','健身操 Aerobics','遛娃散步 Stroller Walk'];
@@ -670,7 +679,7 @@ function renderSettings(){
     <button class="bigbtn" onclick="saveSettings()">保存设置 Save settings</button>
     <div style="font-size:11px;color:var(--muted);margin-top:8px">根据资料自动计算目标：热量 ≤${targets().kcalMax} kcal · 蛋白质类 ≥${targets().protein}g/天（Mifflin-St Jeor 公式，每日约500千卡缺口）。饮食/课表建议仅供参考，不构成医疗建议。</div>
   </div>
-  <div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/名称/动作/有氧</span></h2>
+  <div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/部位/动作/有氧</span></h2>
     ${[1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
       return `<div class="schedrow">
         <div class="r1"><span class="day">${['周日','周一','周二','周三','周四','周五','周六'][d]}</span>
@@ -678,11 +687,9 @@ function renderSettings(){
             <option value="gym" ${sc.type==='gym'?'selected':''}>🏋️ 健身房</option>
             <option value="home" ${sc.type==='home'?'selected':''}>💪 居家</option>
             <option value="rest" ${sc.type==='rest'?'selected':''}>🚶 休息</option></select>
-          <input class="nm" value="${sc.name.replace(/"/g,'&quot;')}" onchange="schedSet(${d},'name',this.value)"></div>
-        <div class="r2"><select onchange="applyPreset(${d},this.value)">
-            <option value="">💪 选无氧部位…</option>` + presetOptionsHtml(sc) + `</select>
-          <button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button></div>
-        <div class="r2"><span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
+          ${presetSelectHtml(d, sc)}</div>
+        <div class="r2"><button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button>
+          <span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
       </div>`;}).join('')}
     <div style="font-size:11px;color:var(--muted);margin-top:8px">改动对还没打开过的日期生效。Changes apply to days you haven't opened yet.</div>
   </div>
