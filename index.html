@@ -54,6 +54,7 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .exdel{border:none; background:none; color:#cbd5e1; font-size:16px; cursor:pointer; padding:2px;}
 .addex{width:100%; padding:8px; margin-top:8px; border:1px dashed var(--border); background:none;
   border-radius:10px; color:var(--teal); font-size:13px; font-weight:600; cursor:pointer;}
+.swaprow{background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px; margin:4px 0 8px;}
 .timerow{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px;}
 .timerow input[type=time]{padding:6px 8px; border:1px solid var(--border); border-radius:8px; font-size:14px;}
 .bigbtn{width:100%; padding:12px; border:none; border-radius:12px; background:var(--teal);
@@ -163,31 +164,39 @@ nav button.on{color:var(--teal); font-weight:700;}
 const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5};
 let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
+/* 护膝版课表：避免箭步蹲/深蹲/跳跃等伤膝动作，以髋主导动作为主 knee-friendly plan */
 const SCHEDULE = {
-  1:{type:'gym', icon:'🏋️', name:'下肢 Lower', where:'12:00 · 办公室健身房 Office gym',
-     ex:['腿举 Leg Press','罗马尼亚硬拉 RDL','行走箭步蹲 Lunges','腿弯举 Leg Curl','臀推 Hip Thrust']},
+  1:{type:'gym', icon:'🏋️', name:'下肢 Lower (护膝版)', where:'12:00 · 办公室健身房 Office gym',
+     ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)']},
   2:{type:'gym', icon:'🏋️', name:'上肢 Upper', where:'12:00 · 办公室健身房 Office gym',
      ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown']},
   3:{type:'home', icon:'💪', name:'哑铃全身 Dumbbell Full Body', where:'8:00 · 家 Home',
-     ex:['高脚杯深蹲 Goblet Squat','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
+     ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
   4:{type:'gym', icon:'🏋️', name:'全身 Full Body', where:'12:00 · 办公室健身房 Office gym',
-     ex:['深蹲 Squat','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
-  5:{type:'home', icon:'💪', name:'HIIT 高强度间歇', where:'8:00 · 家 Home',
-     ex:['深蹲推举 Squat to Press','登山跑 Mountain Climber','弹力带划船 Band Row','臀桥 Glute Bridge','跳绳 Jump Rope']},
+     ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
+  5:{type:'home', icon:'💪', name:'HIIT 低冲击间歇 Low-impact', where:'8:00 · 家 Home',
+     ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks']},
   6:{type:'rest', icon:'🚶', name:'休息 / 遛娃散步 Rest / Walk', where:'', ex:[]},
   0:{type:'rest', icon:'😴', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[]}
 };
 const MEALS = [
   {key:'breakfast', name:'早餐 Breakfast', time:'~8:30'},
   {key:'lunch', name:'午餐 Lunch', time:'~12:30'},
-  {key:'snack', name:'加餐 Snack', time:'~15:30'},
+  {key:'snack', name:'加餐 Snack', time:'可选 optional', optional:true},
   {key:'dinner', name:'晚餐 Dinner', time:'~19:00'}
 ];
+/* 建议食物重量(克) suggested food weights in grams */
+const MEAL_DEFAULTS = {
+  breakfast:{protein:150, carbs:50,  veg:0},
+  lunch:    {protein:150, carbs:150, veg:200},
+  snack:    {protein:50,  carbs:0,   veg:0},
+  dinner:   {protein:150, carbs:100, veg:200}
+};
 const PROTEINS = [
   {key:'salmon', label:'🐟 三文鱼'}, {key:'chicken', label:'🍗 鸡肉'}, {key:'beef', label:'🥩 牛肉'},
   {key:'tofu', label:'🥢 豆腐'}, {key:'eggs', label:'🥚 鸡蛋'}, {key:'shake', label:'🥤 蛋白粉'}
 ];
-const TARGETS = {protein:4, carbsMax:2.5, veg:3, waterL:3}; // 掌/拳/捧/升
+const TARGETS = {protein:450, carbsMax:300, veg:400, waterL:3}; // 克/克/克/升 (蛋白质类为食物重量)
 const CUP_L = 0.8, MAX_CUPS = 5;
 
 let db = load();
@@ -214,17 +223,49 @@ applySettings();
 /* ================= today view ================= */
 /* 起步默认值 [weight kg, reps, sets] — 新手友好；计时动作 reps=秒 */
 const EX_DEFAULTS = {
-  '腿举 Leg Press':[40,12,3], '罗马尼亚硬拉 RDL':[20,10,3], '行走箭步蹲 Lunges':[5,10,3],
-  '腿弯举 Leg Curl':[20,12,3], '臀推 Hip Thrust':[30,10,3],
+  '罗马尼亚硬拉 RDL':[20,10,3], '腿弯举 Leg Curl':[20,12,3], '臀推 Hip Thrust':[30,10,3],
+  '坐姿髋外展 Hip Abduction':[30,15,3], '箱式浅蹲 Box Squat (高箱)':[0,12,3],
   '高位下拉 Lat Pulldown':[25,10,3], '坐姿推胸 Chest Press':[15,10,3], '坐姿划船 Seated Row':[25,10,3],
   '肩上推举 Shoulder Press':[7.5,10,3], '二头弯举 Biceps Curl':[5,10,3], '三头下压 Triceps Pushdown':[15,10,3],
-  '深蹲 Squat':[20,10,3], '上斜推胸 Incline Press':[10,10,3], '绳索划船 Cable Row':[25,10,3], '农夫行走 Farmer Carry':[10,30,3],
-  '高脚杯深蹲 Goblet Squat':[5,10,3], '哑铃硬拉 DB RDL':[7.5,10,3], '地板卧推 Floor Press':[5,10,3],
+  '相扑硬拉 Sumo Deadlift':[20,10,3], '上斜推胸 Incline Press':[10,10,3], '绳索划船 Cable Row':[25,10,3], '农夫行走 Farmer Carry':[10,30,3],
+  '椅子坐站 Sit-to-Stand':[0,12,3], '哑铃硬拉 DB RDL':[7.5,10,3], '地板卧推 Floor Press':[5,10,3],
   '单臂划船 1-Arm Row':[7.5,10,3], '平板支撑 Plank':[0,30,3],
-  '深蹲推举 Squat to Press':[2.5,40,4], '登山跑 Mountain Climber':[0,40,4], '弹力带划船 Band Row':[0,40,4],
-  '臀桥 Glute Bridge':[0,40,4], '跳绳 Jump Rope':[0,40,4]
+  '哑铃摆荡 DB Swing':[7.5,40,4], '出拳 Shadowbox Punch':[0,40,4], '弹力带划船 Band Row':[0,40,4],
+  '臀桥 Glute Bridge':[0,40,4], '低冲击开合 Step Jacks':[0,40,4],
+  '早安式 Good Morning':[10,10,3], '单腿臀桥 Single-leg Glute Bridge':[0,10,3], '弹力带侧走 Band Lateral Walk':[0,15,3],
+  '直臂下压 Straight-arm Pulldown':[15,12,3], '跪姿俯卧撑 Knee Push-up':[0,10,3], '阿诺德推举 Arnold Press':[5,10,3],
+  '侧平举 Lateral Raise':[4,12,3], '锤式弯举 Hammer Curl':[5,10,3], '仰卧臂屈伸 Skullcrusher':[5,10,3],
+  '死虫式 Dead Bug':[0,10,3], '鸟狗式 Bird Dog':[0,10,3], '侧平板 Side Plank':[0,25,3], '原地快走 March in Place':[0,40,4]
 };
 const GENERIC_DEFAULT = [2.5,10,4];
+/* 同肌群护膝替代动作 knee-friendly alternatives by muscle group */
+const ALTS = {
+  '罗马尼亚硬拉 RDL':['腿弯举 Leg Curl','早安式 Good Morning','单腿臀桥 Single-leg Glute Bridge'],
+  '腿弯举 Leg Curl':['罗马尼亚硬拉 RDL','单腿臀桥 Single-leg Glute Bridge'],
+  '臀推 Hip Thrust':['臀桥 Glute Bridge','单腿臀桥 Single-leg Glute Bridge'],
+  '坐姿髋外展 Hip Abduction':['弹力带侧走 Band Lateral Walk','单腿臀桥 Single-leg Glute Bridge'],
+  '箱式浅蹲 Box Squat (高箱)':['椅子坐站 Sit-to-Stand','臀推 Hip Thrust'],
+  '高位下拉 Lat Pulldown':['坐姿划船 Seated Row','直臂下压 Straight-arm Pulldown'],
+  '坐姿推胸 Chest Press':['上斜推胸 Incline Press','跪姿俯卧撑 Knee Push-up'],
+  '坐姿划船 Seated Row':['高位下拉 Lat Pulldown','单臂划船 1-Arm Row'],
+  '肩上推举 Shoulder Press':['侧平举 Lateral Raise','阿诺德推举 Arnold Press'],
+  '二头弯举 Biceps Curl':['锤式弯举 Hammer Curl'],
+  '三头下压 Triceps Pushdown':['仰卧臂屈伸 Skullcrusher','跪姿俯卧撑 Knee Push-up'],
+  '相扑硬拉 Sumo Deadlift':['罗马尼亚硬拉 RDL','臀推 Hip Thrust'],
+  '上斜推胸 Incline Press':['坐姿推胸 Chest Press','地板卧推 Floor Press'],
+  '绳索划船 Cable Row':['坐姿划船 Seated Row','高位下拉 Lat Pulldown'],
+  '农夫行走 Farmer Carry':['侧平板 Side Plank','死虫式 Dead Bug'],
+  '椅子坐站 Sit-to-Stand':['箱式浅蹲 Box Squat (高箱)','臀桥 Glute Bridge'],
+  '哑铃硬拉 DB RDL':['早安式 Good Morning','单腿臀桥 Single-leg Glute Bridge'],
+  '地板卧推 Floor Press':['跪姿俯卧撑 Knee Push-up','上斜推胸 Incline Press'],
+  '单臂划船 1-Arm Row':['弹力带划船 Band Row','坐姿划船 Seated Row'],
+  '平板支撑 Plank':['死虫式 Dead Bug','鸟狗式 Bird Dog','侧平板 Side Plank'],
+  '哑铃摆荡 DB Swing':['臀桥 Glute Bridge','早安式 Good Morning'],
+  '出拳 Shadowbox Punch':['低冲击开合 Step Jacks','原地快走 March in Place'],
+  '低冲击开合 Step Jacks':['出拳 Shadowbox Punch','原地快走 March in Place'],
+  '弹力带划船 Band Row':['单臂划船 1-Arm Row'],
+  '臀桥 Glute Bridge':['臀推 Hip Thrust','单腿臀桥 Single-leg Glute Bridge']
+};
 /* 双重渐进 double progression: 完成12次→加重并回到10次; 否则下次+1次; 自重/计时动作+5秒(上限60) */
 function suggestFor(name, ds){
   const last = lastRecord(name, ds);
@@ -293,6 +334,13 @@ function renderToday(){
           <input type="number" inputmode="numeric" placeholder="组" value="${e.sets}" onchange="setEx(${i},'sets',this.value)" style="width:34px">
         </div>
         <button class="exdel" onclick="delEx(${i})">×</button></div>`;
+      if(swapIdx===i){
+        const alts=(ALTS[e.name]||[]).filter(a=>!w.ex.some(x=>x.name===a));
+        h += `<div class="swaprow"><div style="font-size:11px;color:var(--muted);margin-bottom:5px">🔄 换个同肌群的护膝动作？Replace with a same-muscle alternative:</div><div class="chips">` +
+          alts.map(a=>`<button class="chip" onclick="swapEx(${i},'${a}')">${a}</button>`).join('') +
+          `<button class="chip" style="color:var(--red)" onclick="reallyDelEx(${i})">🗑 直接删除 Delete</button>
+           <button class="chip" onclick="cancelSwap()">取消 Cancel</button></div></div>`;
+      }
     });
     h += `<button class="addex" onclick="addEx()">＋ 添加动作 Add exercise</button>
       <div class="timerow"><span>⏰ 实际时间 Time:</span><input type="time" value="${w.time}" onchange="setWTime(this.value)"></div>
@@ -302,33 +350,36 @@ function renderToday(){
 
   /* --- meals card --- */
   if(!lg.meals) lg.meals = {};
-  let totP=0, totC=0, totV=0, mealsLogged=0;
-  MEALS.forEach(m=>{
-    const ml = lg.meals[m.key];
-    if(ml){ totP+=ml.protein||0; totC+=ml.carbs||0; totV+=ml.veg||0;
-      if((ml.proteins&&ml.proteins.length)||ml.protein||ml.carbs||ml.veg) mealsLogged++; }
-  });
-  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">手掌/拳头/捧 目测即可</span></h2>`;
-  MEALS.forEach(m=>{
-    const ml = lg.meals[m.key] || {proteins:[], protein:0, carbs:0, veg:0};
-    h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name}</span><span class="mtime">${m.time}</span></div>
+  const snackOn = !!(lg.meals.snack && lg.meals.snack.visible);
+  const slots = MEALS.filter(m=>!m.optional || snackOn);
+  let totP=0, totC=0, totV=0, mealsDone=0;
+  slots.forEach(m=>{ const ml=lg.meals[m.key];
+    if(ml && ml.done){ totP+=ml.protein||0; totC+=ml.carbs||0; totV+=ml.veg||0; mealsDone++; } });
+  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">克 g · 已按建议预填</span></h2>
+    <div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 记<b>食物重量</b>（如鸡胸150g、熟米饭150g），按建议吃就直接点 ✓。Log food weight in grams; tap ✓ if you ate as suggested.</div>`;
+  slots.forEach(m=>{
+    const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, MEAL_DEFAULTS[m.key]);
+    h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time}</span></span>
+      <button class="excheck ${ml.done?'on':''}" onclick="toggleMealDone('${m.key}')">${ml.done?'✓':''}</button></div>
       <div class="chips">` +
       PROTEINS.map(p=>`<button class="chip ${ml.proteins.includes(p.key)?'on':''}" onclick="toggleProtein('${m.key}','${p.key}')">${p.label}</button>`).join('') +
       `</div><div class="amounts">
-        <div class="amt"><div class="lbl">蛋白 Protein (掌)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','protein',-0.5)">−</button><span class="val">${ml.protein||0}</span><button onclick="bumpAmt('${m.key}','protein',0.5)">＋</button></div></div>
-        <div class="amt"><div class="lbl">碳水 Carbs (拳)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','carbs',-0.5)">−</button><span class="val">${ml.carbs||0}</span><button onclick="bumpAmt('${m.key}','carbs',0.5)">＋</button></div></div>
-        <div class="amt"><div class="lbl">蔬菜 Veg (捧)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','veg',-0.5)">−</button><span class="val">${ml.veg||0}</span><button onclick="bumpAmt('${m.key}','veg',0.5)">＋</button></div></div>
+        <div class="amt"><div class="lbl">蛋白质 Protein (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','protein',-25)">−</button><span class="val">${ml.protein||0}</span><button onclick="bumpAmt('${m.key}','protein',25)">＋</button></div></div>
+        <div class="amt"><div class="lbl">碳水 Carbs (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','carbs',-25)">−</button><span class="val">${ml.carbs||0}</span><button onclick="bumpAmt('${m.key}','carbs',25)">＋</button></div></div>
+        <div class="amt"><div class="lbl">蔬菜 Veg (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','veg',-25)">−</button><span class="val">${ml.veg||0}</span><button onclick="bumpAmt('${m.key}','veg',25)">＋</button></div></div>
       </div></div>`;
   });
+  if(!snackOn) h += `<button class="addex" onclick="addSnack()">＋ 今天有加餐 Add snack today</button>`;
   const pOK = totP>=TARGETS.protein, cOK = totC<=TARGETS.carbsMax, vOK = totV>=TARGETS.veg;
   h += `<div class="daytotals">
-    <div class="tot ${pOK?'ok':''}">蛋白 ≥${TARGETS.protein}掌<b>${totP}掌 ${pOK?'✓':''}</b></div>
-    <div class="tot ${cOK&&totC>0?'ok':''}">碳水 ≤${TARGETS.carbsMax}拳<b>${totC}拳 ${cOK&&totC>0?'✓':''}</b></div>
-    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${TARGETS.veg}捧<b>${totV}捧 ${vOK?'✓':''}</b></div>
-  </div></div>`;
+    <div class="tot ${pOK?'ok':''}">蛋白质 ≥${TARGETS.protein}g<b>${totP}g ${pOK?'✓':''}</b></div>
+    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${TARGETS.carbsMax}g<b>${totC}g ${cOK&&mealsDone>0?'✓':''}</b></div>
+    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${TARGETS.veg}g<b>${totV}g ${vOK?'✓':''}</b></div>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">合计只算已打卡 ✓ 的餐 Totals count checked meals only</div></div>`;
 
   /* --- water card --- */
   const cups = lg.water||0, liters = Math.round(cups*CUP_L*10)/10;
@@ -345,9 +396,22 @@ function renderToday(){
 
   v.innerHTML = h;
 }
+let swapIdx=null;
 function toggleEx(i){ const w=getWorkout(curDate); w.ex[i].done=!w.ex[i].done; save(); renderToday(); }
 function setEx(i,f,val){ const w=getWorkout(curDate); w.ex[i][f]=val; if(val) w.ex[i].done=true; save(); renderToday(); }
-function delEx(i){ const w=getWorkout(curDate); w.ex.splice(i,1); save(); renderToday(); }
+function delEx(i){
+  const name=getWorkout(curDate).ex[i].name;
+  const alts=(ALTS[name]||[]).filter(a=>!getWorkout(curDate).ex.some(x=>x.name===a));
+  if(alts.length){ swapIdx=(swapIdx===i?null:i); renderToday(); }
+  else { getWorkout(curDate).ex.splice(i,1); save(); renderToday(); }
+}
+function swapEx(i, newName){
+  const sg=suggestFor(newName, curDate);
+  getWorkout(curDate).ex[i]={name:newName, weight:sg.weight?String(sg.weight):'', reps:String(sg.reps), sets:String(sg.sets), done:false};
+  swapIdx=null; save(); renderToday(); toast('已替换 Swapped → '+newName);
+}
+function reallyDelEx(i){ getWorkout(curDate).ex.splice(i,1); swapIdx=null; save(); renderToday(); }
+function cancelSwap(){ swapIdx=null; renderToday(); }
 function addEx(){ const n=prompt('动作名称 Exercise name:'); if(n){
   const sg=suggestFor(n,curDate);
   getWorkout(curDate).ex.push({name:n, weight:sg.weight?String(sg.weight):'', reps:String(sg.reps), sets:String(sg.sets), done:false});
@@ -359,10 +423,15 @@ function toggleWorkoutDone(){
   save(); renderToday(); renderHeader();
   if(w.done) toast('💪 运动打卡成功！Nice work!');
 }
-function getMeal(k){ const lg=dayLog(curDate); if(!lg.meals) lg.meals={}; if(!lg.meals[k]) lg.meals[k]={proteins:[],protein:0,carbs:0,veg:0}; return lg.meals[k]; }
+function getMeal(k){ const lg=dayLog(curDate); if(!lg.meals) lg.meals={};
+  if(!lg.meals[k]) lg.meals[k]=Object.assign({proteins:[], done:false}, MEAL_DEFAULTS[k]);
+  return lg.meals[k]; }
+function toggleMealDone(k){ const m=getMeal(k); m.done=!m.done; save(); renderToday(); renderHeader();
+  if(m.done) toast('🍽️ 已打卡'); }
+function addSnack(){ getMeal('snack').visible=true; save(); renderToday(); }
 function toggleProtein(mk,pk){ const m=getMeal(mk); const i=m.proteins.indexOf(pk);
   if(i>=0) m.proteins.splice(i,1); else m.proteins.push(pk); save(); renderToday(); renderHeader(); }
-function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,Math.round(((m[f]||0)+d)*10)/10); save(); renderToday(); renderHeader(); }
+function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,(m[f]||0)+d); save(); renderToday(); renderHeader(); }
 function setWater(n){ const lg=dayLog(curDate); lg.water = (lg.water===n)?n-1:n; save(); renderToday(); }
 function saveWeight(inputId){
   const val=parseFloat(document.getElementById(inputId).value);
@@ -488,8 +557,7 @@ function dayStatus(ds){
   const w=!!(lg.workout&&lg.workout.done)||(isRest); // rest days don't break streak
   const wReal=!!(lg.workout&&lg.workout.done);
   let mealsLogged=0;
-  if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key];
-    if(ml&&((ml.proteins&&ml.proteins.length)||ml.protein||ml.carbs||ml.veg)) mealsLogged++; });
+  if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) mealsLogged++; });
   const m=mealsLogged>=2, wt=!!lg.weight;
   return {w, wReal, m, wt, any:wReal||mealsLogged>0||wt, complete:w&&m};
 }
@@ -531,7 +599,7 @@ function renderHistory(){
     let workouts=0, pDays=0, wDays=0, weights=[];
     for(let i=0;i<7;i++){ const ds2=addDays(start,i); const lg=db.logs[ds2]; if(!lg)continue;
       if(lg.workout&&lg.workout.done&&SCHEDULE[parse(ds2).getDay()].type!=='rest') workouts++;
-      let tp=0; if(lg.meals) MEALS.forEach(m=>{tp+=(lg.meals[m.key]||{}).protein||0;});
+      let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=ml.protein||0; });
       if(tp>=TARGETS.protein) pDays++;
       if((lg.water||0)*CUP_L>=TARGETS.waterL) wDays++;
       if(lg.weight) weights.push(lg.weight);
