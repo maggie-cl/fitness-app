@@ -195,6 +195,18 @@ const DEFAULT_SCHEDULE = {
   0:{type:'rest', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[], cardio:null}
 };
 const TYPE_ICON = {gym:'🏋️', home:'💪', rest:'🚶'};
+/* 无氧部位/组合预设（全部护膝）strength focus presets, all knee-friendly */
+const STRENGTH_PRESETS = [
+  {key:'lower',    name:'下肢 Lower (护膝版)',           ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)']},
+  {key:'upper',    name:'上肢 Upper',                    ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown']},
+  {key:'full',     name:'全身 Full Body',                ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
+  {key:'push',     name:'推 Push (胸肩三头)',            ex:['坐姿推胸 Chest Press','肩上推举 Shoulder Press','上斜推胸 Incline Press','三头下压 Triceps Pushdown','侧平举 Lateral Raise']},
+  {key:'pull',     name:'拉 Pull (背二头)',              ex:['高位下拉 Lat Pulldown','坐姿划船 Seated Row','单臂划船 1-Arm Row','直臂下压 Straight-arm Pulldown','二头弯举 Biceps Curl']},
+  {key:'glutes',   name:'臀腿 Glutes Focus',             ex:['臀推 Hip Thrust','罗马尼亚硬拉 RDL','单腿臀桥 Single-leg Glute Bridge','弹力带侧走 Band Lateral Walk','坐姿髋外展 Hip Abduction']},
+  {key:'core',     name:'核心 Core',                     ex:['平板支撑 Plank','死虫式 Dead Bug','鸟狗式 Bird Dog','侧平板 Side Plank','农夫行走 Farmer Carry']},
+  {key:'dumbbell', name:'哑铃全身 Dumbbell Full Body',   ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
+  {key:'circuit',  name:'力量循环 Strength Circuit (低冲击)', ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks']}
+];
 function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
 const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼机 Stair Climber','椭圆机 Elliptical','HIIT','健身操 Aerobics','遛娃散步 Stroller Walk'];
 function cardioOptions(){ return CARDIO_TYPES.concat(db.customCardio||[]); }
@@ -661,8 +673,12 @@ function renderSettings(){
             <option value="home" ${sc.type==='home'?'selected':''}>💪 居家</option>
             <option value="rest" ${sc.type==='rest'?'selected':''}>🚶 休息</option></select>
           <input class="nm" value="${sc.name.replace(/"/g,'&quot;')}" onchange="schedSet(${d},'name',this.value)"></div>
-        <div class="r2"><button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button>
-          <span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
+        <div class="r2"><select onchange="applyPreset(${d},this.value);this.value=''">
+            <option value="">💪 选无氧部位…</option>` +
+            STRENGTH_PRESETS.map(p=>`<option value="${p.key}" ${sc.name===p.name?'selected':''}>${p.name}</option>`).join('') +
+          `</select>
+          <button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button></div>
+        <div class="r2"><span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
       </div>`;}).join('')}
     <div style="font-size:11px;color:var(--muted);margin-top:8px">改动对还没打开过的日期生效。Changes apply to days you haven't opened yet.</div>
   </div>
@@ -726,6 +742,12 @@ function schedSet(wd,f,v){ const sc=db.schedule[wd];
   else if(f==='name') sc.name=v;
   else if(f==='cardioMin'){ const n=parseInt(v)||0; sc.cardio=n>0?{min:n}:null; }
   save(); toast('✓ 课表已保存'); }
+function applyPreset(wd,key){ if(!key) return;
+  const p=STRENGTH_PRESETS.find(x=>x.key===key); if(!p) return;
+  const sc=db.schedule[wd];
+  sc.name=p.name; sc.ex=p.ex.slice();
+  if(sc.type==='rest') sc.type='gym';
+  save(); renderSettings(); toast('✓ 已应用 '+p.name); }
 function editEx(wd){ const sc=db.schedule[wd];
   const n=prompt('动作列表（逗号分隔）Exercises (comma-separated):', sc.ex.join(', '));
   if(n!==null){ sc.ex=n.split(/[,，]/).map(x=>x.trim()).filter(Boolean); save(); renderSettings(); toast('✓ 动作已更新'); } }
