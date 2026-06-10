@@ -181,7 +181,7 @@ let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
 /* 护膝版默认课表（可在设置中编辑）：30min无氧+30min有氧/天 knee-friendly default, editable */
 const DEFAULT_SCHEDULE = {
-  1:{type:'gym', name:'下肢 Lower (护膝版)', where:'12:00 · 办公室健身房 Office gym',
+  1:{type:'gym', name:'下肢/臀腿 Lower & Glutes (护膝)', where:'12:00 · 办公室健身房 Office gym',
      ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)'], cardio:{min:30}},
   2:{type:'gym', name:'上肢 Upper', where:'12:00 · 办公室健身房 Office gym',
      ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown'], cardio:{min:30}},
@@ -195,18 +195,24 @@ const DEFAULT_SCHEDULE = {
   0:{type:'rest', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[], cardio:null}
 };
 const TYPE_ICON = {gym:'🏋️', home:'💪', rest:'🚶'};
-/* 无氧部位/组合预设（全部护膝）strength focus presets, all knee-friendly */
+/* 无氧部位预设（全部护膝），按用途分组无重复 strength presets, grouped, no overlap */
 const STRENGTH_PRESETS = [
-  {key:'lower',    name:'下肢 Lower (护膝版)',           ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)']},
-  {key:'upper',    name:'上肢 Upper',                    ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown']},
-  {key:'full',     name:'全身 Full Body',                ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
-  {key:'push',     name:'推 Push (胸肩三头)',            ex:['坐姿推胸 Chest Press','肩上推举 Shoulder Press','上斜推胸 Incline Press','三头下压 Triceps Pushdown','侧平举 Lateral Raise']},
-  {key:'pull',     name:'拉 Pull (背二头)',              ex:['高位下拉 Lat Pulldown','坐姿划船 Seated Row','单臂划船 1-Arm Row','直臂下压 Straight-arm Pulldown','二头弯举 Biceps Curl']},
-  {key:'glutes',   name:'臀腿 Glutes Focus',             ex:['臀推 Hip Thrust','罗马尼亚硬拉 RDL','单腿臀桥 Single-leg Glute Bridge','弹力带侧走 Band Lateral Walk','坐姿髋外展 Hip Abduction']},
-  {key:'core',     name:'核心 Core',                     ex:['平板支撑 Plank','死虫式 Dead Bug','鸟狗式 Bird Dog','侧平板 Side Plank','农夫行走 Farmer Carry']},
-  {key:'dumbbell', name:'哑铃全身 Dumbbell Full Body',   ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
-  {key:'circuit',  name:'力量循环 Strength Circuit (低冲击)', ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks']}
+  {key:'lower',    group:'按部位 By Part',        name:'下肢/臀腿 Lower & Glutes (护膝)', ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)']},
+  {key:'upper',    group:'按部位 By Part',        name:'上肢 Upper',                     ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown']},
+  {key:'full',     group:'按部位 By Part',        name:'全身 Full Body',                 ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
+  {key:'core',     group:'按部位 By Part',        name:'核心 Core',                      ex:['平板支撑 Plank','死虫式 Dead Bug','鸟狗式 Bird Dog','侧平板 Side Plank','农夫行走 Farmer Carry']},
+  {key:'push',     group:'上肢细分 Upper Split',  name:'推 Push (胸肩三头)',             ex:['坐姿推胸 Chest Press','肩上推举 Shoulder Press','上斜推胸 Incline Press','三头下压 Triceps Pushdown','侧平举 Lateral Raise']},
+  {key:'pull',     group:'上肢细分 Upper Split',  name:'拉 Pull (背二头)',               ex:['高位下拉 Lat Pulldown','坐姿划船 Seated Row','单臂划船 1-Arm Row','直臂下压 Straight-arm Pulldown','二头弯举 Biceps Curl']},
+  {key:'dumbbell', group:'居家少器械 Home',       name:'哑铃全身 Dumbbell Full Body',    ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
+  {key:'circuit',  group:'居家少器械 Home',       name:'力量循环 Strength Circuit (低冲击)', ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks']}
 ];
+function presetOptionsHtml(sc){
+  const groups=[];
+  STRENGTH_PRESETS.forEach(p=>{ let g=groups.find(x=>x.label===p.group); if(!g){ g={label:p.group, items:[]}; groups.push(g); } g.items.push(p); });
+  return groups.map(g=>`<optgroup label="${g.label}">`+
+    g.items.map(p=>`<option value="${p.key}" ${sc.name===p.name?'selected':''}>${p.name}</option>`).join('')+
+    `</optgroup>`).join('');
+}
 function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
 const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼机 Stair Climber','椭圆机 Elliptical','HIIT','健身操 Aerobics','遛娃散步 Stroller Walk'];
 function cardioOptions(){ return CARDIO_TYPES.concat(db.customCardio||[]); }
@@ -266,8 +272,10 @@ function applySettings(){
   W_START = s.startW; W_END = s.endW;
   if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   if(!db.customCardio) db.customCardio = [];
-  // migration: WFH strength moved 8:00 → 12:00
+  // migration: WFH strength moved 8:00 → 12:00; lower-day renamed
   [3,5].forEach(d=>{ if(db.schedule[d] && db.schedule[d].where==='8:00 · 家 Home') db.schedule[d].where='12:00 · 家 Home'; });
+  Object.keys(db.schedule).forEach(d=>{ if(db.schedule[d].name==='下肢 Lower (护膝版)') db.schedule[d].name='下肢/臀腿 Lower & Glutes (护膝)';
+    if(db.schedule[d].name==='臀腿 Glutes Focus') db.schedule[d].name='下肢/臀腿 Lower & Glutes (护膝)'; });
 }
 applySettings();
 /* 个人资料→自动计算目标 profile-driven targets (Mifflin-St Jeor, -500 kcal deficit) */
@@ -673,10 +681,8 @@ function renderSettings(){
             <option value="home" ${sc.type==='home'?'selected':''}>💪 居家</option>
             <option value="rest" ${sc.type==='rest'?'selected':''}>🚶 休息</option></select>
           <input class="nm" value="${sc.name.replace(/"/g,'&quot;')}" onchange="schedSet(${d},'name',this.value)"></div>
-        <div class="r2"><select onchange="applyPreset(${d},this.value);this.value=''">
-            <option value="">💪 选无氧部位…</option>` +
-            STRENGTH_PRESETS.map(p=>`<option value="${p.key}" ${sc.name===p.name?'selected':''}>${p.name}</option>`).join('') +
-          `</select>
+        <div class="r2"><select onchange="applyPreset(${d},this.value)">
+            <option value="">💪 选无氧部位…</option>` + presetOptionsHtml(sc) + `</select>
           <button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button></div>
         <div class="r2"><span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
       </div>`;}).join('')}
