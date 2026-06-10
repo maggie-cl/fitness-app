@@ -176,7 +176,7 @@ nav button.on{color:var(--teal); font-weight:700;}
 
 <script>
 /* ================= data ================= */
-const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5, heightCm:174, age:32, sex:'F', activity:1.4};
+const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5, heightCm:174, age:32, sex:'F', activity:1.4, name:'Maggie'};
 let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
 /* 护膝版默认课表（可在设置中编辑）：30min无氧+30min有氧/天 knee-friendly default, editable */
@@ -222,7 +222,6 @@ const SNACK_OPTIONS = [
   {key:'banana',  label:'🍌 香蕉',          kcal:105, p:0},
   {key:'cheese',  label:'🧀 奶酪棒',        kcal:80,  p:25},
   {key:'jerky',   label:'🥩 牛肉干一小包',   kcal:90,  p:30},
-  {key:'edamame', label:'🫘 毛豆一碗',       kcal:120, p:50},
   {key:'tomato',  label:'🍅 小番茄/黄瓜',    kcal:30,  p:0}
 ];
 function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.p:0); },0); }
@@ -635,6 +634,7 @@ function renderSettings(){
   const v=document.getElementById('view-settings');
   let h=`<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
     <div class="planset">
+      <div><label>昵称 Name（显示在标题）</label><input type="text" id="setName" value="${(db.settings.name||'').replace(/"/g,'&quot;')}" placeholder="你的名字"></div>
       <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${W_START}"></div>
       <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${W_END}"></div>
       <div><label>计划周数 Weeks</label><input type="number" inputmode="numeric" id="setWeeks" value="${db.settings.weeks}"></div>
@@ -714,7 +714,8 @@ function saveSettings(){
   if(!wk||wk<1||wk>52){ toast('周数需在 1–52 之间'); return; }
   if(!sd){ toast('请选择开始日期'); return; }
   if(!ht||ht<120||ht>220||!ag||ag<14||ag>90){ toast('请检查身高/年龄'); return; }
-  db.settings = Object.assign({}, db.settings, {startDate:sd, weeks:wk, startW:sw, endW:ew, heightCm:ht, age:ag, sex:sx, activity:ac});
+  const nm=document.getElementById('setName').value.trim();
+  db.settings = Object.assign({}, db.settings, {startDate:sd, weeks:wk, startW:sw, endW:ew, heightCm:ht, age:ag, sex:sx, activity:ac, name:nm});
   applySettings(); save();
   renderHeader(); renderSettings();
   toast('✓ 已保存 · 新目标 '+targets().kcalMax+' kcal');
@@ -817,7 +818,7 @@ function openDay(ds){ if(parse(ds)>parse(TODAY))return; curDate=ds; switchTab('t
 
 /* ================= shell ================= */
 function renderHeader(){
-  document.getElementById('appTitle').textContent=`💪 ${db.settings.weeks}周打卡 Fitness`;
+  document.getElementById('appTitle').textContent=`💪 ${db.settings.name?db.settings.name+' ':db.settings.weeks+'周'}打卡 Fitness`;
   const d=parse(curDate);
   document.getElementById('dateLabel').textContent=`${d.getMonth()+1}月${d.getDate()}日 · ${WEEKDAYS[d.getDay()]}${curDate===TODAY?' (今天)':''}`;
   const wn=weekNum(curDate);
