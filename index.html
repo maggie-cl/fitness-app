@@ -402,7 +402,7 @@ function renderToday(){
     h += `<button class="addex" onclick="addEx()">＋ 添加动作 Add exercise</button>
       <div class="resttimer"><span class="disp" id="restDisp">⏱ 组间休息 Rest timer</span>
         <button onclick="startRest(60)">60s</button><button onclick="startRest(90)">90s</button></div>
-      <div class="timerow"><span>⏰ 实际时间 Time:</span><input type="time" value="${w.time}" onchange="setWTime(this.value)"></div>
+      <div class="timerow"><span>⏰ 锻炼时间 Done at:</span><input type="time" value="${w.time}" onchange="setWTime(this.value)"><span style="font-size:11px;color:var(--muted)">不填则打卡时自动记录</span></div>
       <button class="bigbtn ${w.done?'done':''}" onclick="toggleWorkoutDone()">${w.done?'✓ 运动已打卡 Workout done!':'完成运动打卡 Check in workout'}</button>`;
   }
   h += `</div>`;
@@ -818,7 +818,7 @@ function openDay(ds){ if(parse(ds)>parse(TODAY))return; curDate=ds; switchTab('t
 
 /* ================= shell ================= */
 function renderHeader(){
-  document.getElementById('appTitle').textContent=`💪 ${db.settings.name?db.settings.name+' ':db.settings.weeks+'周'}打卡 Fitness`;
+  document.getElementById('appTitle').textContent=`💪 ${db.settings.name?db.settings.name+' ':''}${db.settings.weeks}周打卡 Fitness`;
   const d=parse(curDate);
   document.getElementById('dateLabel').textContent=`${d.getMonth()+1}月${d.getDate()}日 · ${WEEKDAYS[d.getDay()]}${curDate===TODAY?' (今天)':''}`;
   const wn=weekNum(curDate);
