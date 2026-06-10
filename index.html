@@ -119,6 +119,9 @@ nav{position:fixed; bottom:0; left:0; right:0; background:var(--card); border-to
 nav button{flex:1; padding:9px 0 7px; border:none; background:none; font-size:11px; color:var(--muted); cursor:pointer;}
 nav button .ico{display:block; font-size:20px; margin-bottom:1px;}
 nav button.on{color:var(--teal); font-weight:700;}
+.planset{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.planset label{font-size:11px; color:var(--muted); display:block; margin-bottom:3px;}
+.planset input{width:100%; padding:9px; border:1px solid var(--border); border-radius:10px; font-size:15px;}
 .settings{display:flex; gap:8px; margin-top:4px;}
 .settings button{flex:1; padding:9px; border:1px solid var(--border); background:var(--card);
   border-radius:10px; font-size:13px; color:var(--muted); cursor:pointer;}
@@ -131,7 +134,7 @@ nav button.on{color:var(--teal); font-weight:700;}
 <body>
 <header>
   <div class="row">
-    <h1>💪 6周打卡 Fitness</h1>
+    <h1 id="appTitle">💪 6周打卡 Fitness</h1>
     <span class="streak" id="streakBadge">🔥 0天</span>
   </div>
   <div class="datenav" id="datenav">
@@ -157,8 +160,8 @@ nav button.on{color:var(--teal); font-weight:700;}
 
 <script>
 /* ================= data ================= */
-const PLAN_START = '2026-06-10', PLAN_END = '2026-07-21';
-const W_START = 75, W_END = 70.5;
+const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5};
+let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
 const SCHEDULE = {
   1:{type:'gym', icon:'🏋️', name:'下肢 Lower', where:'12:00 · 办公室健身房 Office gym',
@@ -200,8 +203,42 @@ const TODAY = fmt(new Date());
 let curDate = TODAY, curTab = 'today';
 const WEEKDAYS = ['周日 Sun','周一 Mon','周二 Tue','周三 Wed','周四 Thu','周五 Fri','周六 Sat'];
 function weekNum(ds){ return Math.floor((parse(ds)-parse(PLAN_START))/864e5/7)+1; }
+function applySettings(){
+  db.settings = Object.assign({}, DEF_SETTINGS, db.settings||{});
+  const s = db.settings;
+  PLAN_START = s.startDate; PLAN_END = addDays(s.startDate, s.weeks*7-1);
+  W_START = s.startW; W_END = s.endW;
+}
+applySettings();
 
 /* ================= today view ================= */
+/* 起步默认值 [weight kg, reps, sets] — 新手友好；计时动作 reps=秒 */
+const EX_DEFAULTS = {
+  '腿举 Leg Press':[40,12,3], '罗马尼亚硬拉 RDL':[20,10,3], '行走箭步蹲 Lunges':[5,10,3],
+  '腿弯举 Leg Curl':[20,12,3], '臀推 Hip Thrust':[30,10,3],
+  '高位下拉 Lat Pulldown':[25,10,3], '坐姿推胸 Chest Press':[15,10,3], '坐姿划船 Seated Row':[25,10,3],
+  '肩上推举 Shoulder Press':[7.5,10,3], '二头弯举 Biceps Curl':[5,10,3], '三头下压 Triceps Pushdown':[15,10,3],
+  '深蹲 Squat':[20,10,3], '上斜推胸 Incline Press':[10,10,3], '绳索划船 Cable Row':[25,10,3], '农夫行走 Farmer Carry':[10,30,3],
+  '高脚杯深蹲 Goblet Squat':[5,10,3], '哑铃硬拉 DB RDL':[7.5,10,3], '地板卧推 Floor Press':[5,10,3],
+  '单臂划船 1-Arm Row':[7.5,10,3], '平板支撑 Plank':[0,30,3],
+  '深蹲推举 Squat to Press':[2.5,40,4], '登山跑 Mountain Climber':[0,40,4], '弹力带划船 Band Row':[0,40,4],
+  '臀桥 Glute Bridge':[0,40,4], '跳绳 Jump Rope':[0,40,4]
+};
+const GENERIC_DEFAULT = [2.5,10,4];
+/* 双重渐进 double progression: 完成12次→加重并回到10次; 否则下次+1次; 自重/计时动作+5秒(上限60) */
+function suggestFor(name, ds){
+  const last = lastRecord(name, ds);
+  if(!last){ const d = EX_DEFAULTS[name]||GENERIC_DEFAULT;
+    return {weight:d[0], reps:d[1], sets:d[2], why:'建议起步 suggested start'}; }
+  const w = parseFloat(last.weight)||0, r = parseInt(last.reps)||0, s = parseInt(last.sets)||3;
+  if(w > 0){
+    if(r >= 12){ const inc = w >= 15 ? 2.5 : 1;
+      return {weight:Math.round((w+inc)*10)/10, reps:10, sets:s, why:'上次≥12次 → 加重 add weight'}; }
+    return {weight:w, reps:Math.min(12,r+1), sets:s, why:'+1次 rep'};
+  }
+  if(r < 60) return {weight:0, reps:r+5, sets:s, why:'+5秒 sec'};
+  return {weight:0, reps:r, sets:s, why:'保持 keep'};
+}
 function lastRecord(exName, beforeDs){
   let ds = addDays(beforeDs,-1);
   for(let i=0;i<60;i++){
@@ -218,7 +255,10 @@ function getWorkout(ds){
   const lg = dayLog(ds);
   if(!lg.workout){
     const sch = SCHEDULE[parse(ds).getDay()];
-    lg.workout = {done:false, time:'', ex:sch.ex.map(n=>({name:n, weight:'', reps:'', sets:'', done:false}))};
+    lg.workout = {done:false, time:'', ex:sch.ex.map(n=>{
+      const sg = suggestFor(n, ds);
+      return {name:n, weight:sg.weight ? String(sg.weight) : '', reps:String(sg.reps), sets:String(sg.sets), done:false};
+    })};
   }
   return lg.workout;
 }
@@ -236,12 +276,15 @@ function renderToday(){
     h += `<div class="empty">今天休息，散步遛娃也算运动 🍃<br>Rest day — a stroller walk counts!</div>
           <button class="bigbtn ${w.done?'done':'ghost'}" onclick="toggleWorkoutDone()">${w.done?'✓ 今天动过了 Moved today':'🚶 散步了 / 动了一下 I moved today'}</button>`;
   } else {
+    h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 数值已按<b>渐进超负荷</b>预填：完成12次→下次加重；没到12次→下次+1次。按实际完成修改即可。Defaults pre-filled by double progression.</div>`;
     w.ex.forEach((e,i)=>{
-      const last = lastRecord(e.name, ds);
+      const last = lastRecord(e.name, ds), sg = suggestFor(e.name, ds);
       h += `<div class="exrow">
         <button class="excheck ${e.done?'on':''}" onclick="toggleEx(${i})">${e.done?'✓':''}</button>
         <div class="exinfo"><div class="exname">${e.name}</div>
-          <div class="exlast">${last?`上次 Last: <b>${last.weight||'-'}kg × ${last.reps||'-'} × ${last.sets||'-'}</b>`:'首次记录 First time'}</div></div>
+          <div class="exlast">${last
+            ? `上次 <b>${last.weight||'-'}kg×${last.reps||'-'}×${last.sets||'-'}</b> · 建议 ${sg.why}`
+            : `建议起步 Suggested: ${sg.weight?sg.weight+'kg × ':''}${sg.reps} × ${sg.sets}`}</div></div>
         <div class="exinputs">
           <input type="number" inputmode="decimal" placeholder="kg" value="${e.weight}" onchange="setEx(${i},'weight',this.value)">
           <span class="x">×</span>
@@ -305,7 +348,10 @@ function renderToday(){
 function toggleEx(i){ const w=getWorkout(curDate); w.ex[i].done=!w.ex[i].done; save(); renderToday(); }
 function setEx(i,f,val){ const w=getWorkout(curDate); w.ex[i][f]=val; if(val) w.ex[i].done=true; save(); renderToday(); }
 function delEx(i){ const w=getWorkout(curDate); w.ex.splice(i,1); save(); renderToday(); }
-function addEx(){ const n=prompt('动作名称 Exercise name:'); if(n){ getWorkout(curDate).ex.push({name:n,weight:'',reps:'',sets:'',done:false}); save(); renderToday(); } }
+function addEx(){ const n=prompt('动作名称 Exercise name:'); if(n){
+  const sg=suggestFor(n,curDate);
+  getWorkout(curDate).ex.push({name:n, weight:sg.weight?String(sg.weight):'', reps:String(sg.reps), sets:String(sg.sets), done:false});
+  save(); renderToday(); } }
 function setWTime(t){ getWorkout(curDate).time=t; save(); }
 function toggleWorkoutDone(){
   const w=getWorkout(curDate); w.done=!w.done;
@@ -328,8 +374,8 @@ function saveWeight(inputId){
 /* ================= weight view ================= */
 function weightSeries(){
   const pts=[]; let ds=PLAN_START;
-  // include up to 7 days before plan for MA warmup
-  for(let i=0;i<49;i++){ const lg=db.logs[ds]; if(lg&&lg.weight) pts.push({ds,w:lg.weight}); if(ds===PLAN_END)break; ds=addDays(ds,1); }
+  const n=db.settings.weeks*7;
+  for(let i=0;i<n;i++){ const lg=db.logs[ds]; if(lg&&lg.weight) pts.push({ds,w:lg.weight}); if(ds===PLAN_END)break; ds=addDays(ds,1); }
   return pts;
 }
 function movingAvg(pts){
@@ -364,7 +410,17 @@ function renderWeight(){
     <div class="weightinput"><input type="number" inputmode="decimal" step="0.1" placeholder="kg" id="wInTab">
     <button onclick="saveWeight('wInTab')">记录 Save</button></div>
     <div style="font-size:12px;color:var(--muted)">💡 每天早晨空腹称重最准；看 7 日均线，别在意单日波动。Weigh in each morning; judge by the 7-day average, not daily swings.</div></div>
-  <div class="card"><h2>⚙️ 数据 Data</h2><div class="settings">
+  <div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
+    <div class="planset">
+      <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${W_START}"></div>
+      <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${W_END}"></div>
+      <div><label>计划周数 Weeks</label><input type="number" inputmode="numeric" id="setWeeks" value="${db.settings.weeks}"></div>
+      <div><label>开始日期 Start date</label><input type="date" id="setStartDate" value="${PLAN_START}"></div>
+    </div>
+    <button class="bigbtn" onclick="saveSettings()">保存设置 Save settings</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">目标线、周数、周报会按新设置自动重算。Target line, weeks & reports recalculate automatically.</div>
+  </div>
+  <div class="card"><h2>🗂️ 数据 Data</h2><div class="settings">
     <button onclick="exportData()">⬇️ 导出备份 Export</button>
     <button onclick="document.getElementById('importFile').click()">⬆️ 导入 Import</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
@@ -385,9 +441,10 @@ function chartSVG(pts,ma){
         <text x="${L-5}" y="${Y(w)+3}" font-size="9" fill="#94a3b8" text-anchor="end">${w}</text>`;
   }
   // x labels: week starts
-  for(let i=0;i<=6;i++){
+  const d0=parse(PLAN_START);
+  for(let i=0;i<=db.settings.weeks;i++){
     const t=t0+i*7*864e5; if(t>t1)break;
-    s+=`<text x="${X(t)}" y="${H-8}" font-size="9" fill="#94a3b8" text-anchor="middle">${i===0?'6/10':'W'+(i+1)}</text>`;
+    s+=`<text x="${X(t)}" y="${H-8}" font-size="9" fill="#94a3b8" text-anchor="middle">${i===0?(d0.getMonth()+1)+'/'+d0.getDate():'W'+(i+1)}</text>`;
   }
   // target line
   s+=`<line x1="${X(t0)}" y1="${Y(W_START)}" x2="${X(t1)}" y2="${Y(W_END)}" stroke="#d97706" stroke-width="2" stroke-dasharray="6 4" opacity=".8"/>`;
@@ -398,6 +455,19 @@ function chartSVG(pts,ma){
   pts.forEach(p=>{ s+=`<circle cx="${X(parse(p.ds).getTime())}" cy="${Y(p.w)}" r="3" fill="#0d9488"/>`; });
   if(!pts.length) s+=`<text x="${W/2}" y="${H/2}" font-size="12" fill="#94a3b8" text-anchor="middle">还没有体重记录，今天开始吧 No data yet</text>`;
   s+='</svg>'; return s;
+}
+function saveSettings(){
+  const sw=parseFloat(document.getElementById('setStartW').value);
+  const ew=parseFloat(document.getElementById('setEndW').value);
+  const wk=parseInt(document.getElementById('setWeeks').value);
+  const sd=document.getElementById('setStartDate').value;
+  if(!sw||!ew||sw<30||sw>200||ew<30||ew>200){ toast('请检查体重输入'); return; }
+  if(!wk||wk<1||wk>52){ toast('周数需在 1–52 之间'); return; }
+  if(!sd){ toast('请选择开始日期'); return; }
+  db.settings = {startDate:sd, weeks:wk, startW:sw, endW:ew};
+  applySettings(); save();
+  renderHeader(); renderWeight();
+  toast('✓ 设置已保存 Settings saved');
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
@@ -434,9 +504,10 @@ function renderHistory(){
   const v=document.getElementById('view-history');
   let h=`<div class="card"><h2><span>📅 打卡日历 Calendar</span><span class="sub">绿=全完成 黄=部分</span></h2><div class="cal">`;
   ['一','二','三','四','五','六','日'].forEach(d=>h+=`<div class="hd">${d}</div>`);
-  // calendar starts Mon Jun 8 (the Monday of plan start week)
-  let ds='2026-06-08';
-  while(parse(ds)<=parse('2026-07-26')){
+  // calendar spans Monday of start week → Sunday of final week
+  let ds=addDays(PLAN_START, -((parse(PLAN_START).getDay()+6)%7));
+  const calEnd=addDays(PLAN_END, 6-((parse(PLAN_END).getDay()+6)%7));
+  while(parse(ds)<=parse(calEnd)){
     const st=dayStatus(ds), inPlan=parse(ds)>=parse(PLAN_START)&&parse(ds)<=parse(PLAN_END);
     const future=parse(ds)>parse(TODAY);
     const cls=ds===TODAY?'today':''
@@ -452,7 +523,7 @@ function renderHistory(){
   /* weekly reports */
   h+=`<h2 style="font-size:15px;margin:4px 0 10px">📊 周报 Weekly Report</h2>`;
   let any=false;
-  for(let wk=1;wk<=6;wk++){
+  for(let wk=1;wk<=db.settings.weeks;wk++){
     const start=addDays(PLAN_START,(wk-1)*7);
     if(parse(start)>parse(TODAY)) break;
     any=true;
@@ -486,10 +557,12 @@ function openDay(ds){ if(parse(ds)>parse(TODAY))return; curDate=ds; switchTab('t
 
 /* ================= shell ================= */
 function renderHeader(){
+  document.getElementById('appTitle').textContent=`💪 ${db.settings.weeks}周打卡 Fitness`;
   const d=parse(curDate);
   document.getElementById('dateLabel').textContent=`${d.getMonth()+1}月${d.getDate()}日 · ${WEEKDAYS[d.getDay()]}${curDate===TODAY?' (今天)':''}`;
   const wn=weekNum(curDate);
-  document.getElementById('weekBadge').textContent=(wn>=1&&wn<=6)?`第 ${wn} 周 / 共 6 周 · Week ${wn} of 6`:'计划期外 Outside plan';
+  const W=db.settings.weeks;
+  document.getElementById('weekBadge').textContent=(wn>=1&&wn<=W)?`第 ${wn} 周 / 共 ${W} 周 · Week ${wn} of ${W}`:'计划期外 Outside plan';
   document.getElementById('streakBadge').textContent=`🔥 ${streak()}天`;
 }
 function navDate(n){
