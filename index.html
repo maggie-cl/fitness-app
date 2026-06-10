@@ -185,11 +185,11 @@ const DEFAULT_SCHEDULE = {
      ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)'], cardio:{min:30}},
   2:{type:'gym', name:'上肢 Upper', where:'12:00 · 办公室健身房 Office gym',
      ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown'], cardio:{min:30}},
-  3:{type:'home', name:'哑铃全身 Dumbbell Full Body', where:'8:00 · 家 Home',
+  3:{type:'home', name:'哑铃全身 Dumbbell Full Body', where:'12:00 · 家 Home',
      ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank'], cardio:{min:30}},
   4:{type:'gym', name:'全身 Full Body', where:'12:00 · 办公室健身房 Office gym',
      ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry'], cardio:{min:30}},
-  5:{type:'home', name:'力量循环 Strength Circuit (低冲击)', where:'8:00 · 家 Home',
+  5:{type:'home', name:'力量循环 Strength Circuit (低冲击)', where:'12:00 · 家 Home',
      ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks'], cardio:{min:30}},
   6:{type:'rest', name:'休息 / 遛娃散步 Rest / Walk', where:'', ex:[], cardio:null},
   0:{type:'rest', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[], cardio:null}
@@ -212,7 +212,22 @@ const PROTEINS = [
 /* 每克热量估算 kcal per gram of food (cooked where applicable) */
 const KCAL_PER_G = {salmon:2.08, chicken:1.65, beef:2.5, tofu:0.8, eggs:1.55, shake:4.0};
 const KCAL_CARB = 1.3, KCAL_VEG = 0.25, KCAL_PROTEIN_DEFAULT = 1.7;
+/* 加餐选项：固定份量+估算热量, p=蛋白质类食物等效克数 snack picker, fixed portions */
+const SNACK_OPTIONS = [
+  {key:'egg',     label:'🥚 鸡蛋×1',        kcal:78,  p:50},
+  {key:'yogurt',  label:'🥛 酸奶一杯',       kcal:120, p:100},
+  {key:'apple',   label:'🍎 苹果',          kcal:95,  p:0},
+  {key:'shake',   label:'🥤 蛋白粉一勺',     kcal:120, p:50},
+  {key:'nuts',    label:'🥜 坚果一小把',     kcal:170, p:0},
+  {key:'banana',  label:'🍌 香蕉',          kcal:105, p:0},
+  {key:'cheese',  label:'🧀 奶酪棒',        kcal:80,  p:25},
+  {key:'jerky',   label:'🥩 牛肉干一小包',   kcal:90,  p:30},
+  {key:'edamame', label:'🫘 毛豆一碗',       kcal:120, p:50},
+  {key:'tomato',  label:'🍅 小番茄/黄瓜',    kcal:30,  p:0}
+];
+function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.p:0); },0); }
 function mealKcal(ml){
+  if(ml.items) return ml.items.reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.kcal:0); },0);
   const d = (ml.proteins && ml.proteins.length)
     ? ml.proteins.reduce((s,k)=>s+(KCAL_PER_G[k]||KCAL_PROTEIN_DEFAULT),0)/ml.proteins.length
     : KCAL_PROTEIN_DEFAULT;
@@ -240,6 +255,8 @@ function applySettings(){
   W_START = s.startW; W_END = s.endW;
   if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   if(!db.customCardio) db.customCardio = [];
+  // migration: WFH strength moved 8:00 → 12:00
+  [3,5].forEach(d=>{ if(db.schedule[d] && db.schedule[d].where==='8:00 · 家 Home') db.schedule[d].where='12:00 · 家 Home'; });
 }
 applySettings();
 /* 个人资料→自动计算目标 profile-driven targets (Mifflin-St Jeor, -500 kcal deficit) */
@@ -258,7 +275,7 @@ function mealDefault(k){
   if(k==='breakfast') return {protein:p, carbs:cb, veg:0};
   if(k==='lunch')     return {protein:p, carbs:cl, veg:200};
   if(k==='dinner')    return {protein:T.protein-2*p, carbs:Math.max(0,T.carbsMax-cb-cl), veg:200};
-  return {protein:50, carbs:0, veg:0};
+  return {items:[], protein:0, carbs:0, veg:0}; // snack: tap-to-pick items, no grams
 }
 
 /* ================= today view ================= */
@@ -401,7 +418,7 @@ function renderToday(){
       `<button class="chip" style="border-style:dashed;color:var(--teal)" onclick="addCardioType()">＋ 添加</button></div>
       <div class="amounts"><div class="amt" style="max-width:160px;margin:0 auto"><div class="lbl">时长 Minutes</div><div class="ctl">
         <button onclick="setCardio('min',${cd.min-5})">−</button><span class="val">${cd.min}</span><button onclick="setCardio('min',${cd.min+5})">＋</button></div></div></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">护膝有氧：快走/椭圆机/单车最佳；上班日午休力量+晚8点有氧，居家日早力量+午休有氧</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">护膝有氧：快走/爬坡/椭圆机最佳 · 建议节奏：午休力量 + 晚8点有氧</div>
       <button class="bigbtn ${cd.done?'done':''}" onclick="toggleCardioDone()">${cd.done?'✓ 有氧已打卡 Cardio done!':'完成有氧打卡 Check in cardio'}</button></div>`;
   }
 
@@ -411,14 +428,20 @@ function renderToday(){
   const slots = MEALS.filter(m=>!m.optional || snackOn);
   let totP=0, totC=0, totV=0, totK=0, mealsDone=0;
   slots.forEach(m=>{ const ml=lg.meals[m.key];
-    if(ml && ml.done){ totP+=ml.protein||0; totC+=ml.carbs||0; totV+=ml.veg||0; totK+=mealKcal(ml); mealsDone++; } });
+    if(ml && ml.done){ totP+=(ml.protein||0)+snackP(ml); totC+=ml.carbs||0; totV+=ml.veg||0; totK+=mealKcal(ml); mealsDone++; } });
   h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">克 g · 已按建议预填</span></h2>
     <div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 记<b>食物重量</b>（如鸡胸150g、熟米饭150g），按建议吃就直接点 ✓。Log food weight in grams; tap ✓ if you ate as suggested.</div>`;
   slots.forEach(m=>{
     const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, mealDefault(m.key));
     h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time} · ≈${mealKcal(ml)} kcal</span></span>
-      <button class="excheck ${ml.done?'on':''}" onclick="toggleMealDone('${m.key}')">${ml.done?'✓':''}</button></div>
-      <div class="chips">` +
+      <button class="excheck ${ml.done?'on':''}" onclick="toggleMealDone('${m.key}')">${ml.done?'✓':''}</button></div>`;
+    if(m.key==='snack'){
+      h += `<div class="chips">` +
+        SNACK_OPTIONS.map(o=>`<button class="chip ${(ml.items||[]).includes(o.key)?'on':''}" onclick="toggleSnackItem('${o.key}')">${o.label} ${o.kcal}</button>`).join('') +
+        `</div></div>`;
+      return;
+    }
+    h += `<div class="chips">` +
       PROTEINS.map(p=>`<button class="chip ${ml.proteins.includes(p.key)?'on':''}" onclick="toggleProtein('${m.key}','${p.key}')">${p.label}</button>`).join('') +
       `</div><div class="amounts">
         <div class="amt"><div class="lbl">蛋白质 Protein (g)</div><div class="ctl">
@@ -518,6 +541,11 @@ function tickRest(){ const el=document.getElementById('restDisp'); if(!el){ clea
 function toggleMealDone(k){ const m=getMeal(k); m.done=!m.done; save(); renderToday(); renderHeader();
   if(m.done) toast('🍽️ 已打卡'); }
 function addSnack(){ getMeal('snack').visible=true; save(); renderToday(); }
+function toggleSnackItem(k){ const m=getMeal('snack');
+  if(!m.items) m.items=[];
+  const i=m.items.indexOf(k);
+  if(i>=0) m.items.splice(i,1); else m.items.push(k);
+  save(); renderToday(); }
 function toggleProtein(mk,pk){ const m=getMeal(mk); const i=m.proteins.indexOf(pk);
   if(i>=0) m.proteins.splice(i,1); else m.proteins.push(pk); save(); renderToday(); renderHeader(); }
 function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,(m[f]||0)+d); save(); renderToday(); renderHeader(); }
@@ -762,7 +790,7 @@ function renderHistory(){
     for(let i=0;i<7;i++){ const ds2=addDays(start,i); const lg=db.logs[ds2]; if(!lg)continue;
       if(lg.workout&&lg.workout.done&&SCHED(parse(ds2).getDay()).type!=='rest') workouts++;
       if(lg.cardio&&lg.cardio.done) cDays++;
-      let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=ml.protein||0; });
+      let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=(ml.protein||0)+snackP(ml); });
       if(tp>=T.protein) pDays++;
       if((lg.water||0)*CUP_L>=T.waterL) wDays++;
       if(lg.weight) weights.push(lg.weight);
