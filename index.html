@@ -55,6 +55,18 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .addex{width:100%; padding:8px; margin-top:8px; border:1px dashed var(--border); background:none;
   border-radius:10px; color:var(--teal); font-size:13px; font-weight:600; cursor:pointer;}
 .swaprow{background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px; margin:4px 0 8px;}
+.resttimer{display:flex; align-items:center; gap:8px; margin-top:10px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:8px 10px;}
+.resttimer .disp{flex:1; font-size:15px; font-weight:800; color:var(--teal-dark);}
+.resttimer button{padding:7px 14px; border:none; border-radius:8px; background:var(--teal); color:#fff; font-size:13px; font-weight:700; cursor:pointer;}
+.schedrow{padding:9px 0; border-bottom:1px solid var(--border);}
+.schedrow:last-child{border-bottom:none;}
+.schedrow .r1{display:flex; gap:6px; align-items:center; margin-bottom:6px;}
+.schedrow .day{font-weight:800; font-size:13px; min-width:34px;}
+.schedrow select,.schedrow input{padding:6px 8px; border:1px solid var(--border); border-radius:8px; font-size:13px;}
+.schedrow input.nm{flex:1; min-width:0;}
+.schedrow .r2{display:flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); padding-left:40px;}
+.schedrow .exbtn{border:1px dashed var(--border); background:none; color:var(--teal); border-radius:8px; padding:5px 10px; font-size:12px; cursor:pointer;}
+.schedrow input.cmin{width:52px; text-align:center;}
 .timerow{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px;}
 .timerow input[type=time]{padding:6px 8px; border:1px solid var(--border); border-radius:8px; font-size:14px;}
 .bigbtn{width:100%; padding:12px; border:none; border-radius:12px; background:var(--teal);
@@ -161,45 +173,41 @@ nav button.on{color:var(--teal); font-weight:700;}
 
 <script>
 /* ================= data ================= */
-const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5};
+const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5, heightCm:174, age:32, sex:'F', activity:1.4};
 let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
-/* 护膝版课表：避免箭步蹲/深蹲/跳跃等伤膝动作，以髋主导动作为主 knee-friendly plan */
-const SCHEDULE = {
-  1:{type:'gym', icon:'🏋️', name:'下肢 Lower (护膝版)', where:'12:00 · 办公室健身房 Office gym',
-     ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)']},
-  2:{type:'gym', icon:'🏋️', name:'上肢 Upper', where:'12:00 · 办公室健身房 Office gym',
-     ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown']},
-  3:{type:'home', icon:'💪', name:'哑铃全身 Dumbbell Full Body', where:'8:00 · 家 Home',
-     ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank']},
-  4:{type:'gym', icon:'🏋️', name:'全身 Full Body', where:'12:00 · 办公室健身房 Office gym',
-     ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry']},
-  5:{type:'home', icon:'💪', name:'HIIT 低冲击间歇 Low-impact', where:'8:00 · 家 Home',
-     ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks']},
-  6:{type:'rest', icon:'🚶', name:'休息 / 遛娃散步 Rest / Walk', where:'', ex:[]},
-  0:{type:'rest', icon:'😴', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[]}
+/* 护膝版默认课表（可在设置中编辑）：30min无氧+30min有氧/天 knee-friendly default, editable */
+const DEFAULT_SCHEDULE = {
+  1:{type:'gym', name:'下肢 Lower (护膝版)', where:'12:00 · 办公室健身房 Office gym',
+     ex:['罗马尼亚硬拉 RDL','腿弯举 Leg Curl','臀推 Hip Thrust','坐姿髋外展 Hip Abduction','箱式浅蹲 Box Squat (高箱)'], cardio:{min:30}},
+  2:{type:'gym', name:'上肢 Upper', where:'12:00 · 办公室健身房 Office gym',
+     ex:['高位下拉 Lat Pulldown','坐姿推胸 Chest Press','坐姿划船 Seated Row','肩上推举 Shoulder Press','二头弯举 Biceps Curl','三头下压 Triceps Pushdown'], cardio:{min:30}},
+  3:{type:'home', name:'哑铃全身 Dumbbell Full Body', where:'8:00 · 家 Home',
+     ex:['椅子坐站 Sit-to-Stand','哑铃硬拉 DB RDL','地板卧推 Floor Press','单臂划船 1-Arm Row','平板支撑 Plank'], cardio:{min:30}},
+  4:{type:'gym', name:'全身 Full Body', where:'12:00 · 办公室健身房 Office gym',
+     ex:['相扑硬拉 Sumo Deadlift','上斜推胸 Incline Press','绳索划船 Cable Row','臀推 Hip Thrust','农夫行走 Farmer Carry'], cardio:{min:30}},
+  5:{type:'home', name:'力量循环 Strength Circuit (低冲击)', where:'8:00 · 家 Home',
+     ex:['哑铃摆荡 DB Swing','出拳 Shadowbox Punch','弹力带划船 Band Row','臀桥 Glute Bridge','低冲击开合 Step Jacks'], cardio:{min:30}},
+  6:{type:'rest', name:'休息 / 遛娃散步 Rest / Walk', where:'', ex:[], cardio:null},
+  0:{type:'rest', name:'休息 Rest · 备餐日 Meal Prep', where:'', ex:[], cardio:null}
 };
+const TYPE_ICON = {gym:'🏋️', home:'💪', rest:'🚶'};
+function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
+const CARDIO_TYPES = ['快走 Brisk Walk','椭圆机 Elliptical','单车 Cycling','游泳 Swim','低冲击HIIT','遛娃散步 Stroller Walk'];
 const MEALS = [
   {key:'breakfast', name:'早餐 Breakfast', time:'~8:30'},
   {key:'lunch', name:'午餐 Lunch', time:'~12:30'},
   {key:'snack', name:'加餐 Snack', time:'可选 optional', optional:true},
   {key:'dinner', name:'晚餐 Dinner', time:'~19:00'}
 ];
-/* 建议食物重量(克) suggested food weights in grams */
-const MEAL_DEFAULTS = {
-  breakfast:{protein:150, carbs:50,  veg:0},
-  lunch:    {protein:150, carbs:150, veg:200},
-  snack:    {protein:50,  carbs:0,   veg:0},
-  dinner:   {protein:150, carbs:100, veg:200}
-};
+/* 建议食物重量由 mealDefault() 按个人资料动态计算 suggested grams computed from profile */
 const PROTEINS = [
   {key:'salmon', label:'🐟 三文鱼'}, {key:'chicken', label:'🍗 鸡肉'}, {key:'beef', label:'🥩 牛肉'},
   {key:'tofu', label:'🥢 豆腐'}, {key:'eggs', label:'🥚 鸡蛋'}, {key:'shake', label:'🥤 蛋白粉'}
 ];
-const TARGETS = {protein:450, carbsMax:300, veg:400, waterL:3}; // 克/克/克/升 (蛋白质类为食物重量)
 /* 每克热量估算 kcal per gram of food (cooked where applicable) */
 const KCAL_PER_G = {salmon:2.08, chicken:1.65, beef:2.5, tofu:0.8, eggs:1.55, shake:4.0};
-const KCAL_CARB = 1.3, KCAL_VEG = 0.25, KCAL_PROTEIN_DEFAULT = 1.7, KCAL_MAX = 1650;
+const KCAL_CARB = 1.3, KCAL_VEG = 0.25, KCAL_PROTEIN_DEFAULT = 1.7;
 function mealKcal(ml){
   const d = (ml.proteins && ml.proteins.length)
     ? ml.proteins.reduce((s,k)=>s+(KCAL_PER_G[k]||KCAL_PROTEIN_DEFAULT),0)/ml.proteins.length
@@ -226,8 +234,27 @@ function applySettings(){
   const s = db.settings;
   PLAN_START = s.startDate; PLAN_END = addDays(s.startDate, s.weeks*7-1);
   W_START = s.startW; W_END = s.endW;
+  if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
 }
 applySettings();
+/* 个人资料→自动计算目标 profile-driven targets (Mifflin-St Jeor, -500 kcal deficit) */
+function targets(){
+  const s = db.settings;
+  const bmr = 10*s.startW + 6.25*(s.heightCm||174) - 5*(s.age||32) + (s.sex==='M'?5:-161);
+  const kcal = Math.max(1200, Math.round((bmr*(s.activity||1.4) - 500)/25)*25);
+  const protein = Math.round((s.endW*1.6/0.25)/25)*25;  // 1.6g蛋白/kg目标体重 ÷ 平均25%含量 → 食物克数
+  const carbs = Math.min(400, Math.max(100, Math.round((kcal*0.30/KCAL_CARB)/25)*25));
+  return {protein:protein, carbsMax:carbs, veg:400, waterL:3, kcalMax:kcal};
+}
+function mealDefault(k){
+  const T = targets();
+  const p = Math.round(T.protein/3/25)*25;
+  const cb = Math.round(T.carbsMax/6/25)*25, cl = Math.round(T.carbsMax/2/25)*25;
+  if(k==='breakfast') return {protein:p, carbs:cb, veg:0};
+  if(k==='lunch')     return {protein:p, carbs:cl, veg:200};
+  if(k==='dinner')    return {protein:T.protein-2*p, carbs:Math.max(0,T.carbsMax-cb-cl), veg:200};
+  return {protein:50, carbs:0, veg:0};
+}
 
 /* ================= today view ================= */
 /* 起步默认值 [weight kg, reps, sets] — 新手友好；计时动作 reps=秒 */
@@ -304,7 +331,7 @@ function lastRecord(exName, beforeDs){
 function getWorkout(ds){
   const lg = dayLog(ds);
   if(!lg.workout){
-    const sch = SCHEDULE[parse(ds).getDay()];
+    const sch = SCHED(parse(ds).getDay());
     lg.workout = {done:false, time:'', ex:sch.ex.map(n=>{
       const sg = suggestFor(n, ds);
       return {name:n, weight:sg.weight ? String(sg.weight) : '', reps:String(sg.reps), sets:String(sg.sets), done:false};
@@ -314,12 +341,12 @@ function getWorkout(ds){
 }
 function renderToday(){
   const v = document.getElementById('view-today');
-  const ds = curDate, wd = parse(ds).getDay(), sch = SCHEDULE[wd];
+  const ds = curDate, wd = parse(ds).getDay(), sch = SCHED(wd);
   const lg = dayLog(ds), w = getWorkout(ds);
   let h = '';
 
   /* --- workout card --- */
-  h += `<div class="card"><h2><span>${sch.icon} ${sch.name}</span>
+  h += `<div class="card"><h2><span>${TYPE_ICON[sch.type]||'💪'} ${sch.name}</span>
         <span class="pill ${w.done?'done':''}">${w.done?'✓ 已完成 Done':(sch.type==='rest'?'休息日':'待打卡')}</span></h2>`;
   if(sch.where) h += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 8px">${sch.where}</div>`;
   if(sch.type==='rest'){
@@ -352,10 +379,26 @@ function renderToday(){
       }
     });
     h += `<button class="addex" onclick="addEx()">＋ 添加动作 Add exercise</button>
+      <div class="resttimer"><span class="disp" id="restDisp">⏱ 组间休息 Rest timer</span>
+        <button onclick="startRest(60)">60s</button><button onclick="startRest(90)">90s</button></div>
       <div class="timerow"><span>⏰ 实际时间 Time:</span><input type="time" value="${w.time}" onchange="setWTime(this.value)"></div>
       <button class="bigbtn ${w.done?'done':''}" onclick="toggleWorkoutDone()">${w.done?'✓ 运动已打卡 Workout done!':'完成运动打卡 Check in workout'}</button>`;
   }
   h += `</div>`;
+
+  /* --- cardio card --- */
+  if(sch.cardio){
+    const cd = getCardio(ds);
+    h += `<div class="card"><h2><span>🏃 有氧 Cardio</span>
+      <span class="pill ${cd.done?'done':''}">${cd.done?'✓ '+cd.min+' min':'目标 '+((sch.cardio&&sch.cardio.min)||30)+' min'}</span></h2>
+      <div class="chips">` +
+      CARDIO_TYPES.map(t=>`<button class="chip ${cd.type===t?'on':''}" onclick="setCardio('type','${t}')">${t}</button>`).join('') +
+      `</div>
+      <div class="amounts"><div class="amt" style="max-width:160px;margin:0 auto"><div class="lbl">时长 Minutes</div><div class="ctl">
+        <button onclick="setCardio('min',${cd.min-5})">−</button><span class="val">${cd.min}</span><button onclick="setCardio('min',${cd.min+5})">＋</button></div></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">护膝有氧：快走/椭圆机/单车最佳；上班日午休力量+晚8点有氧，居家日早力量+午休有氧</div>
+      <button class="bigbtn ${cd.done?'done':''}" onclick="toggleCardioDone()">${cd.done?'✓ 有氧已打卡 Cardio done!':'完成有氧打卡 Check in cardio'}</button></div>`;
+  }
 
   /* --- meals card --- */
   if(!lg.meals) lg.meals = {};
@@ -367,7 +410,7 @@ function renderToday(){
   h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">克 g · 已按建议预填</span></h2>
     <div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 记<b>食物重量</b>（如鸡胸150g、熟米饭150g），按建议吃就直接点 ✓。Log food weight in grams; tap ✓ if you ate as suggested.</div>`;
   slots.forEach(m=>{
-    const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, MEAL_DEFAULTS[m.key]);
+    const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, mealDefault(m.key));
     h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time} · ≈${mealKcal(ml)} kcal</span></span>
       <button class="excheck ${ml.done?'on':''}" onclick="toggleMealDone('${m.key}')">${ml.done?'✓':''}</button></div>
       <div class="chips">` +
@@ -382,27 +425,31 @@ function renderToday(){
       </div></div>`;
   });
   if(!snackOn) h += `<button class="addex" onclick="addSnack()">＋ 今天有加餐 Add snack today</button>`;
-  const pOK = totP>=TARGETS.protein, cOK = totC<=TARGETS.carbsMax, vOK = totV>=TARGETS.veg, kOK = mealsDone>0 && totK<=KCAL_MAX;
+  const T = targets();
+  const pOK = totP>=T.protein, cOK = totC<=T.carbsMax, vOK = totV>=T.veg, kOK = mealsDone>0 && totK<=T.kcalMax;
   h += `<div class="daytotals">
-    <div class="tot ${pOK?'ok':''}">蛋白 ≥${TARGETS.protein}g<b>${totP} ${pOK?'✓':''}</b></div>
-    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${TARGETS.carbsMax}g<b>${totC} ${cOK&&mealsDone>0?'✓':''}</b></div>
-    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${TARGETS.veg}g<b>${totV} ${vOK?'✓':''}</b></div>
-    <div class="tot ${kOK?'ok':''}">热量 ≤${KCAL_MAX}<b>${totK} ${kOK?'✓':''}</b></div>
+    <div class="tot ${pOK?'ok':''}">蛋白 ≥${T.protein}g<b>${totP} ${pOK?'✓':''}</b></div>
+    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${T.carbsMax}g<b>${totC} ${cOK&&mealsDone>0?'✓':''}</b></div>
+    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${T.veg}g<b>${totV} ${vOK?'✓':''}</b></div>
+    <div class="tot ${kOK?'ok':''}">热量 ≤${T.kcalMax}<b>${totK} ${kOK?'✓':''}</b></div>
   </div>
   <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">合计只算已打卡 ✓ 的餐 · 热量为估算，未含烹饪油（约 +100~150 kcal）</div></div>`;
 
   /* --- water card --- */
   const cups = lg.water||0, liters = Math.round(cups*CUP_L*10)/10;
-  h += `<div class="card"><h2><span>💧 饮水 Water</span><span class="pill ${liters>=TARGETS.waterL?'done':''}">${liters>=TARGETS.waterL?'✓ 达标':'目标 3L'}</span></h2>
+  h += `<div class="card"><h2><span>💧 饮水 Water</span><span class="pill ${liters>=T.waterL?'done':''}">${liters>=T.waterL?'✓ 达标':'目标 3L'}</span></h2>
     <div class="cups">` +
     Array.from({length:MAX_CUPS},(_,i)=>`<button class="cup ${i<cups?'full':''}" onclick="setWater(${i+1})">🥛</button>`).join('') +
-    `</div><div class="waterstat"><b>${liters} L</b> / ${TARGETS.waterL} L（一杯 0.8L，点杯子记录）</div></div>`;
+    `</div><div class="waterstat"><b>${liters} L</b> / ${T.waterL} L（一杯 0.8L，点杯子记录）</div></div>`;
 
-  /* --- weight quick entry --- */
-  const wt = lg.weight;
-  h += `<div class="card"><h2><span>⚖️ 今日体重 Weight</span>${wt?`<span class="pill done">✓ ${wt} kg</span>`:''}</h2>
-    <div class="weightinput"><input type="number" inputmode="decimal" step="0.1" placeholder="早晨空腹 kg" id="wInToday" value="${wt||''}">
-    <button onclick="saveWeight('wInToday')">记录</button></div></div>`;
+  /* --- weight & waist quick entry --- */
+  const wt = lg.weight, ws = lg.waist;
+  h += `<div class="card"><h2><span>⚖️ 今日体重·腰围 Weight & Waist</span>${wt?`<span class="pill done">✓ ${wt}kg${ws?' · '+ws+'cm':''}</span>`:''}</h2>
+    <div class="weightinput">
+      <input type="number" inputmode="decimal" step="0.1" placeholder="体重 kg" id="wInToday" value="${wt||''}">
+      <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm (每周量一次)" id="waistInToday" value="${ws||''}">
+      <button onclick="saveBody('Today')">记录</button></div>
+    <div style="font-size:11px;color:var(--muted)">腰围每周量一次即可（肚脐水平）；减脂增肌期体重可能不动但腰围在缩 📉</div></div>`;
 
   v.innerHTML = h;
 }
@@ -434,8 +481,28 @@ function toggleWorkoutDone(){
   if(w.done) toast('💪 运动打卡成功！Nice work!');
 }
 function getMeal(k){ const lg=dayLog(curDate); if(!lg.meals) lg.meals={};
-  if(!lg.meals[k]) lg.meals[k]=Object.assign({proteins:[], done:false}, MEAL_DEFAULTS[k]);
+  if(!lg.meals[k]) lg.meals[k]=Object.assign({proteins:[], done:false}, mealDefault(k));
   return lg.meals[k]; }
+function getCardio(ds){ const lg=dayLog(ds);
+  if(!lg.cardio){ const sc=SCHED(parse(ds).getDay()); lg.cardio={done:false, type:CARDIO_TYPES[0], min:(sc.cardio&&sc.cardio.min)||30}; }
+  return lg.cardio; }
+function setCardio(f,v){ const c=getCardio(curDate);
+  if(f==='min') c.min=Math.max(5, v); else c.type=v;
+  save(); renderToday(); }
+function toggleCardioDone(){ const c=getCardio(curDate); c.done=!c.done; save(); renderToday(); renderHeader();
+  if(c.done) toast('🏃 有氧打卡成功！Nice!'); }
+/* rest timer */
+let restInt=null, restEnd=0, audioCtx=null;
+function beep(){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value=880; g.gain.setValueAtTime(.25,audioCtx.currentTime); o.start(); o.stop(audioCtx.currentTime+.5); }catch(e){} }
+function startRest(sec){ restEnd=Date.now()+sec*1000; clearInterval(restInt); restInt=setInterval(tickRest,250); tickRest(); }
+function tickRest(){ const el=document.getElementById('restDisp'); if(!el){ clearInterval(restInt); return; }
+  const left=Math.ceil((restEnd-Date.now())/1000);
+  if(left<=0){ clearInterval(restInt); el.textContent='✅ 休息结束，开始下一组 Go!'; beep();
+    if(navigator.vibrate) navigator.vibrate(300);
+    setTimeout(()=>{ const e2=document.getElementById('restDisp'); if(e2) e2.textContent='⏱ 组间休息 Rest timer'; },4000); }
+  else el.textContent='⏱ '+left+' 秒 …'; }
 function toggleMealDone(k){ const m=getMeal(k); m.done=!m.done; save(); renderToday(); renderHeader();
   if(m.done) toast('🍽️ 已打卡'); }
 function addSnack(){ getMeal('snack').visible=true; save(); renderToday(); }
@@ -443,14 +510,43 @@ function toggleProtein(mk,pk){ const m=getMeal(mk); const i=m.proteins.indexOf(p
   if(i>=0) m.proteins.splice(i,1); else m.proteins.push(pk); save(); renderToday(); renderHeader(); }
 function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,(m[f]||0)+d); save(); renderToday(); renderHeader(); }
 function setWater(n){ const lg=dayLog(curDate); lg.water = (lg.water===n)?n-1:n; save(); renderToday(); }
-function saveWeight(inputId){
-  const val=parseFloat(document.getElementById(inputId).value);
-  if(!val||val<30||val>200){ toast('请输入有效体重'); return; }
-  dayLog(curDate).weight=val; save(); toast('⚖️ 体重已记录 '+val+' kg');
+function saveBody(suffix){
+  const wEl=document.getElementById('wIn'+suffix), sEl=document.getElementById('waistIn'+suffix);
+  const w=wEl?parseFloat(wEl.value):NaN, s=sEl?parseFloat(sEl.value):NaN;
+  const wOK=w>=30&&w<=200, sOK=s>=40&&s<=200;
+  if(!wOK&&!sOK){ toast('请输入体重或腰围'); return; }
+  const lg=dayLog(curDate);
+  if(wOK) lg.weight=w; if(sOK) lg.waist=s;
+  save(); toast('✓ 已记录 '+(wOK?w+'kg ':'')+(sOK?s+'cm':''));
   renderToday(); if(curTab==='weight') renderWeight(); renderHeader();
 }
 
 /* ================= weight view ================= */
+function waistSeries(){
+  const pts=[]; let ds=PLAN_START; const n=db.settings.weeks*7;
+  for(let i=0;i<n;i++){ const lg=db.logs[ds]; if(lg&&lg.waist) pts.push({ds,w:lg.waist}); if(ds===PLAN_END)break; ds=addDays(ds,1); }
+  return pts;
+}
+function waistCard(){
+  const pts=waistSeries();
+  const cur=pts.length?pts[pts.length-1].w:null, first=pts.length?pts[0].w:null;
+  const delta=(cur!==null&&first!==null)?Math.round((cur-first)*10)/10:null;
+  let inner;
+  if(!pts.length) inner='<div class="empty">还没有腰围记录 — 每周量一次，减脂增肌期它比体重更诚实 📏</div>';
+  else {
+    const W=440,H=150,L=38,R=10,T=12,B=10;
+    const t0=parse(PLAN_START).getTime(), t1=parse(PLAN_END).getTime();
+    const ymin=Math.floor(Math.min(...pts.map(p=>p.w)))-1, ymax=Math.ceil(Math.max(...pts.map(p=>p.w)))+1;
+    const step=Math.max(1, Math.ceil((ymax-ymin)/5));
+    const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(ymax-v)/(ymax-ymin)*(H-T-B);
+    let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">`;
+    for(let v=ymin;v<=ymax;v+=step){ s+=`<line x1="${L}" y1="${Y(v)}" x2="${W-R}" y2="${Y(v)}" stroke="#e2e8f0"/><text x="${L-5}" y="${Y(v)+3}" font-size="9" fill="#94a3b8" text-anchor="end">${v}</text>`; }
+    if(pts.length>1) s+=`<polyline points="${pts.map(p=>X(parse(p.ds).getTime())+','+Y(p.w)).join(' ')}" fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linejoin="round"/>`;
+    pts.forEach(p=>{ s+=`<circle cx="${X(parse(p.ds).getTime())}" cy="${Y(p.w)}" r="3.5" fill="#7c3aed"/>`; });
+    s+='</svg>'; inner=s;
+  }
+  return `<div class="card"><h2><span>📏 腰围 Waist (cm)</span><span class="sub">${cur!==null?cur+' cm'+(delta?` · ${delta>0?'+':''}${delta} cm`:''):'每周一次'}</span></h2>${inner}</div>`;
+}
 function weightSeries(){
   const pts=[]; let ds=PLAN_START;
   const n=db.settings.weeks*7;
@@ -485,19 +581,43 @@ function renderWeight(){
   <div class="legend"><span><i style="background:#0d9488"></i>每日 Daily</span>
   <span><i style="background:#2563eb"></i>7日均线 7d Avg</span>
   <span><i style="background:#d97706"></i>目标 Target</span></div></div>
-  <div class="card"><h2>⚖️ 记录体重 Log weight（${curDate===TODAY?'今天':curDate}）</h2>
-    <div class="weightinput"><input type="number" inputmode="decimal" step="0.1" placeholder="kg" id="wInTab">
-    <button onclick="saveWeight('wInTab')">记录 Save</button></div>
-    <div style="font-size:12px;color:var(--muted)">💡 每天早晨空腹称重最准；看 7 日均线，别在意单日波动。Weigh in each morning; judge by the 7-day average, not daily swings.</div></div>
+  <div class="card"><h2>⚖️ 记录 Log（${curDate===TODAY?'今天':curDate}）</h2>
+    <div class="weightinput"><input type="number" inputmode="decimal" step="0.1" placeholder="体重 kg" id="wInTab">
+    <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm" id="waistInTab">
+    <button onclick="saveBody('Tab')">记录 Save</button></div>
+    <div style="font-size:12px;color:var(--muted)">💡 体重每天早晨空腹称；腰围每周一次（肚脐水平）。看 7 日均线，别在意单日波动。</div></div>
+  ${waistCard()}
   <div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
     <div class="planset">
       <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${W_START}"></div>
       <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${W_END}"></div>
       <div><label>计划周数 Weeks</label><input type="number" inputmode="numeric" id="setWeeks" value="${db.settings.weeks}"></div>
       <div><label>开始日期 Start date</label><input type="date" id="setStartDate" value="${PLAN_START}"></div>
+      <div><label>身高 Height (cm)</label><input type="number" inputmode="numeric" id="setHeight" value="${db.settings.heightCm}"></div>
+      <div><label>年龄 Age</label><input type="number" inputmode="numeric" id="setAge" value="${db.settings.age}"></div>
+      <div><label>性别 Sex</label><select id="setSex" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;font-size:15px">
+        <option value="F" ${db.settings.sex!=='M'?'selected':''}>女 F</option><option value="M" ${db.settings.sex==='M'?'selected':''}>男 M</option></select></div>
+      <div><label>日常活动量 Activity</label><select id="setActivity" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;font-size:15px">
+        <option value="1.3" ${db.settings.activity==1.3?'selected':''}>久坐 Sedentary</option>
+        <option value="1.4" ${db.settings.activity==1.4?'selected':''}>轻度 Light</option>
+        <option value="1.55" ${db.settings.activity==1.55?'selected':''}>中度 Moderate</option></select></div>
     </div>
     <button class="bigbtn" onclick="saveSettings()">保存设置 Save settings</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">目标线、周数、周报会按新设置自动重算。Target line, weeks & reports recalculate automatically.</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">根据资料自动计算目标：热量 ≤${targets().kcalMax} kcal · 蛋白质类 ≥${targets().protein}g/天（Mifflin-St Jeor 公式，每日约500千卡缺口）。饮食/课表建议仅供参考，不构成医疗建议。</div>
+  </div>
+  <div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/名称/动作/有氧</span></h2>
+    ${[1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
+      return `<div class="schedrow">
+        <div class="r1"><span class="day">${['周日','周一','周二','周三','周四','周五','周六'][d]}</span>
+          <select onchange="schedSet(${d},'type',this.value)">
+            <option value="gym" ${sc.type==='gym'?'selected':''}>🏋️ 健身房</option>
+            <option value="home" ${sc.type==='home'?'selected':''}>💪 居家</option>
+            <option value="rest" ${sc.type==='rest'?'selected':''}>🚶 休息</option></select>
+          <input class="nm" value="${sc.name.replace(/"/g,'&quot;')}" onchange="schedSet(${d},'name',this.value)"></div>
+        <div class="r2"><button class="exbtn" onclick="editEx(${d})">编辑动作 (${sc.ex.length})</button>
+          <span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
+      </div>`;}).join('')}
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">改动对还没打开过的日期生效。Changes apply to days you haven't opened yet.</div>
   </div>
   <div class="card"><h2>🗂️ 数据 Data</h2><div class="settings">
     <button onclick="exportData()">⬇️ 导出备份 Export</button>
@@ -540,14 +660,27 @@ function saveSettings(){
   const ew=parseFloat(document.getElementById('setEndW').value);
   const wk=parseInt(document.getElementById('setWeeks').value);
   const sd=document.getElementById('setStartDate').value;
+  const ht=parseInt(document.getElementById('setHeight').value);
+  const ag=parseInt(document.getElementById('setAge').value);
+  const sx=document.getElementById('setSex').value;
+  const ac=parseFloat(document.getElementById('setActivity').value);
   if(!sw||!ew||sw<30||sw>200||ew<30||ew>200){ toast('请检查体重输入'); return; }
   if(!wk||wk<1||wk>52){ toast('周数需在 1–52 之间'); return; }
   if(!sd){ toast('请选择开始日期'); return; }
-  db.settings = {startDate:sd, weeks:wk, startW:sw, endW:ew};
+  if(!ht||ht<120||ht>220||!ag||ag<14||ag>90){ toast('请检查身高/年龄'); return; }
+  db.settings = Object.assign({}, db.settings, {startDate:sd, weeks:wk, startW:sw, endW:ew, heightCm:ht, age:ag, sex:sx, activity:ac});
   applySettings(); save();
   renderHeader(); renderWeight();
-  toast('✓ 设置已保存 Settings saved');
+  toast('✓ 已保存 · 新目标 '+targets().kcalMax+' kcal');
 }
+function schedSet(wd,f,v){ const sc=db.schedule[wd];
+  if(f==='type') sc.type=v;
+  else if(f==='name') sc.name=v;
+  else if(f==='cardioMin'){ const n=parseInt(v)||0; sc.cardio=n>0?{min:n}:null; }
+  save(); toast('✓ 课表已保存'); }
+function editEx(wd){ const sc=db.schedule[wd];
+  const n=prompt('动作列表（逗号分隔）Exercises (comma-separated):', sc.ex.join(', '));
+  if(n!==null){ sc.ex=n.split(/[,，]/).map(x=>x.trim()).filter(Boolean); save(); renderWeight(); toast('✓ 动作已更新'); } }
 function exportData(){
   const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
@@ -563,13 +696,13 @@ function importData(inp){
 /* ================= history view ================= */
 function dayStatus(ds){
   const lg=db.logs[ds]; if(!lg) return {w:false,m:false,wt:false,any:false};
-  const wd=parse(ds).getDay(), isRest=SCHEDULE[wd].type==='rest';
+  const wd=parse(ds).getDay(), isRest=SCHED(wd).type==='rest';
   const w=!!(lg.workout&&lg.workout.done)||(isRest); // rest days don't break streak
   const wReal=!!(lg.workout&&lg.workout.done);
   let mealsLogged=0;
   if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) mealsLogged++; });
-  const m=mealsLogged>=2, wt=!!lg.weight;
-  return {w, wReal, m, wt, any:wReal||mealsLogged>0||wt, complete:w&&m};
+  const m=mealsLogged>=2, wt=!!lg.weight, c=!!(lg.cardio&&lg.cardio.done);
+  return {w, wReal, m, wt, c, any:wReal||c||mealsLogged>0||wt, complete:w&&m};
 }
 function streak(){
   let n=0, ds=TODAY;
@@ -593,7 +726,7 @@ function renderHistory(){
     const d=parse(ds);
     h+=`<div class="cell ${cls} ${bg} ${future||!inPlan?'future':''}" onclick="openDay('${ds}')">
       <span class="d">${d.getMonth()+1}/${d.getDate()}</span>
-      <span class="marks">${!future&&inPlan?(st.wReal?'💪':'')+(st.m?'🍽':'')+(st.wt?'⚖️':''):''}</span></div>`;
+      <span class="marks">${!future&&inPlan?(st.wReal?'💪':'')+(st.c?'🏃':'')+(st.m?'🍽':'')+(st.wt?'⚖️':''):''}</span></div>`;
     ds=addDays(ds,1);
   }
   h+=`</div><div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">点任意日期可补打卡 Tap a day to backfill</div></div>`;
@@ -606,12 +739,14 @@ function renderHistory(){
     if(parse(start)>parse(TODAY)) break;
     any=true;
     const end=addDays(start,6);
-    let workouts=0, pDays=0, wDays=0, weights=[];
+    const T=targets();
+    let workouts=0, cDays=0, pDays=0, wDays=0, weights=[];
     for(let i=0;i<7;i++){ const ds2=addDays(start,i); const lg=db.logs[ds2]; if(!lg)continue;
-      if(lg.workout&&lg.workout.done&&SCHEDULE[parse(ds2).getDay()].type!=='rest') workouts++;
+      if(lg.workout&&lg.workout.done&&SCHED(parse(ds2).getDay()).type!=='rest') workouts++;
+      if(lg.cardio&&lg.cardio.done) cDays++;
       let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=ml.protein||0; });
-      if(tp>=TARGETS.protein) pDays++;
-      if((lg.water||0)*CUP_L>=TARGETS.waterL) wDays++;
+      if(tp>=T.protein) pDays++;
+      if((lg.water||0)*CUP_L>=T.waterL) wDays++;
       if(lg.weight) weights.push(lg.weight);
     }
     const avgW=weights.length?Math.round(weights.reduce((a,b)=>a+b)/weights.length*10)/10:null;
@@ -623,7 +758,8 @@ function renderHistory(){
     }
     const delta=avgW&&prevW?Math.round((avgW-prevW)*10)/10:null;
     h+=`<div class="card weekcard"><h2><span>第 ${wk} 周 Week ${wk}</span><span class="sub">${start.slice(5)} ~ ${end.slice(5)}</span></h2>
-      <div class="wkrow"><span>🏋️ 运动 Workouts</span><b>${workouts} / 5</b></div>
+      <div class="wkrow"><span>🏋️ 无氧 Strength</span><b>${workouts} / 5</b></div>
+      <div class="wkrow"><span>🏃 有氧 Cardio</span><b>${cDays} / 5</b></div>
       <div class="wkrow"><span>⚖️ 周均体重 Avg weight</span><b>${avgW??'–'} kg ${delta!==null?`<span style="color:${delta<=0?'var(--green)':'var(--red)'}">(${delta>0?'+':''}${delta})</span>`:''}</b></div>
       <div class="wkrow"><span>🥩 蛋白达标天数 Protein days</span><b>${pDays} / 7</b></div>
       <div class="wkrow"><span>💧 饮水达标天数 Water days</span><b>${wDays} / 7</b></div></div>`;
