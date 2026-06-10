@@ -106,9 +106,10 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .wstat{flex:1; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px 6px; text-align:center;}
 .wstat .lbl{font-size:10px; color:var(--muted);}
 .wstat .val{font-size:17px; font-weight:800; margin-top:2px;}
-.weightinput{display:flex; gap:8px; margin-bottom:12px;}
-.weightinput input{flex:1; padding:12px; border:1.5px solid var(--border); border-radius:12px; font-size:17px; text-align:center;}
-.weightinput button{padding:0 22px; border:none; border-radius:12px; background:var(--teal); color:#fff; font-size:15px; font-weight:700; cursor:pointer;}
+.weightinput{display:flex; gap:6px; margin-bottom:10px;}
+.weightinput input{flex:1; min-width:0; padding:10px 6px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; text-align:center;}
+.weightinput input::placeholder{font-size:12px; color:#94a3b8;}
+.weightinput button{padding:0 16px; border:none; border-radius:10px; background:var(--teal); color:#fff; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;}
 #chart{width:100%; height:auto;}
 .legend{display:flex; gap:14px; justify-content:center; font-size:11px; color:var(--muted); margin-top:6px;}
 .legend i{display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:4px;}
@@ -162,12 +163,14 @@ nav button.on{color:var(--teal); font-weight:700;}
   <div id="view-today"></div>
   <div id="view-weight" style="display:none"></div>
   <div id="view-history" style="display:none"></div>
+  <div id="view-settings" style="display:none"></div>
 </main>
 
 <nav>
   <button id="tab-today" class="on" onclick="switchTab('today')"><span class="ico">✅</span>今日 Today</button>
   <button id="tab-weight" onclick="switchTab('weight')"><span class="ico">⚖️</span>体重 Weight</button>
   <button id="tab-history" onclick="switchTab('history')"><span class="ico">📅</span>历史 History</button>
+  <button id="tab-settings" onclick="switchTab('settings')"><span class="ico">⚙️</span>设置 Settings</button>
 </nav>
 <div class="toast" id="toast"></div>
 
@@ -193,7 +196,8 @@ const DEFAULT_SCHEDULE = {
 };
 const TYPE_ICON = {gym:'🏋️', home:'💪', rest:'🚶'};
 function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
-const CARDIO_TYPES = ['快走 Brisk Walk','椭圆机 Elliptical','单车 Cycling','游泳 Swim','低冲击HIIT','遛娃散步 Stroller Walk'];
+const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼机 Stair Climber','椭圆机 Elliptical','HIIT','健身操 Aerobics','遛娃散步 Stroller Walk'];
+function cardioOptions(){ return CARDIO_TYPES.concat(db.customCardio||[]); }
 const MEALS = [
   {key:'breakfast', name:'早餐 Breakfast', time:'~8:30'},
   {key:'lunch', name:'午餐 Lunch', time:'~12:30'},
@@ -235,6 +239,7 @@ function applySettings(){
   PLAN_START = s.startDate; PLAN_END = addDays(s.startDate, s.weeks*7-1);
   W_START = s.startW; W_END = s.endW;
   if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+  if(!db.customCardio) db.customCardio = [];
 }
 applySettings();
 /* 个人资料→自动计算目标 profile-driven targets (Mifflin-St Jeor, -500 kcal deficit) */
@@ -392,8 +397,8 @@ function renderToday(){
     h += `<div class="card"><h2><span>🏃 有氧 Cardio</span>
       <span class="pill ${cd.done?'done':''}">${cd.done?'✓ '+cd.min+' min':'目标 '+((sch.cardio&&sch.cardio.min)||30)+' min'}</span></h2>
       <div class="chips">` +
-      CARDIO_TYPES.map(t=>`<button class="chip ${cd.type===t?'on':''}" onclick="setCardio('type','${t}')">${t}</button>`).join('') +
-      `</div>
+      cardioOptions().map(t=>`<button class="chip ${cd.type===t?'on':''}" onclick="setCardio('type','${t}')">${t}</button>`).join('') +
+      `<button class="chip" style="border-style:dashed;color:var(--teal)" onclick="addCardioType()">＋ 添加</button></div>
       <div class="amounts"><div class="amt" style="max-width:160px;margin:0 auto"><div class="lbl">时长 Minutes</div><div class="ctl">
         <button onclick="setCardio('min',${cd.min-5})">−</button><span class="val">${cd.min}</span><button onclick="setCardio('min',${cd.min+5})">＋</button></div></div></div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">护膝有氧：快走/椭圆机/单车最佳；上班日午休力量+晚8点有氧，居家日早力量+午休有氧</div>
@@ -444,12 +449,12 @@ function renderToday(){
 
   /* --- weight & waist quick entry --- */
   const wt = lg.weight, ws = lg.waist;
-  h += `<div class="card"><h2><span>⚖️ 今日体重·腰围 Weight & Waist</span>${wt?`<span class="pill done">✓ ${wt}kg${ws?' · '+ws+'cm':''}</span>`:''}</h2>
+  h += `<div class="card"><h2><span>⚖️ 体重·腰围 Body</span>${wt||ws?`<span class="pill done">✓ ${wt?wt+'kg':''}${wt&&ws?' · ':''}${ws?ws+'cm':''}</span>`:''}</h2>
     <div class="weightinput">
       <input type="number" inputmode="decimal" step="0.1" placeholder="体重 kg" id="wInToday" value="${wt||''}">
-      <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm (每周量一次)" id="waistInToday" value="${ws||''}">
+      <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm" id="waistInToday" value="${ws||''}">
       <button onclick="saveBody('Today')">记录</button></div>
-    <div style="font-size:11px;color:var(--muted)">腰围每周量一次即可（肚脐水平）；减脂增肌期体重可能不动但腰围在缩 📉</div></div>`;
+    <div style="font-size:11px;color:var(--muted)">体重每天早晨空腹称；腰围每周一次（肚脐水平），减脂增肌期它比体重更诚实 📉</div></div>`;
 
   v.innerHTML = h;
 }
@@ -491,6 +496,13 @@ function setCardio(f,v){ const c=getCardio(curDate);
   save(); renderToday(); }
 function toggleCardioDone(){ const c=getCardio(curDate); c.done=!c.done; save(); renderToday(); renderHeader();
   if(c.done) toast('🏃 有氧打卡成功！Nice!'); }
+function addCardioType(){
+  const n=prompt('有氧运动名称 Cardio name (如: 划船机 Rowing, 跳舞 Dance, 拳击 Boxing):');
+  if(!n||!n.trim()) return;
+  const name=n.trim();
+  if(!cardioOptions().includes(name)) db.customCardio.push(name);
+  setCardio('type', name);
+}
 /* rest timer */
 let restInt=null, restEnd=0, audioCtx=null;
 function beep(){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
@@ -586,8 +598,14 @@ function renderWeight(){
     <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm" id="waistInTab">
     <button onclick="saveBody('Tab')">记录 Save</button></div>
     <div style="font-size:12px;color:var(--muted)">💡 体重每天早晨空腹称；腰围每周一次（肚脐水平）。看 7 日均线，别在意单日波动。</div></div>
-  ${waistCard()}
-  <div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
+  ${waistCard()}`;
+  v.innerHTML=h;
+}
+
+/* ================= settings view ================= */
+function renderSettings(){
+  const v=document.getElementById('view-settings');
+  let h=`<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
     <div class="planset">
       <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${W_START}"></div>
       <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${W_END}"></div>
@@ -670,7 +688,7 @@ function saveSettings(){
   if(!ht||ht<120||ht>220||!ag||ag<14||ag>90){ toast('请检查身高/年龄'); return; }
   db.settings = Object.assign({}, db.settings, {startDate:sd, weeks:wk, startW:sw, endW:ew, heightCm:ht, age:ag, sex:sx, activity:ac});
   applySettings(); save();
-  renderHeader(); renderWeight();
+  renderHeader(); renderSettings();
   toast('✓ 已保存 · 新目标 '+targets().kcalMax+' kcal');
 }
 function schedSet(wd,f,v){ const sc=db.schedule[wd];
@@ -680,7 +698,7 @@ function schedSet(wd,f,v){ const sc=db.schedule[wd];
   save(); toast('✓ 课表已保存'); }
 function editEx(wd){ const sc=db.schedule[wd];
   const n=prompt('动作列表（逗号分隔）Exercises (comma-separated):', sc.ex.join(', '));
-  if(n!==null){ sc.ex=n.split(/[,，]/).map(x=>x.trim()).filter(Boolean); save(); renderWeight(); toast('✓ 动作已更新'); } }
+  if(n!==null){ sc.ex=n.split(/[,，]/).map(x=>x.trim()).filter(Boolean); save(); renderSettings(); toast('✓ 动作已更新'); } }
 function exportData(){
   const blob=new Blob([JSON.stringify(db,null,1)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
@@ -786,12 +804,12 @@ function navDate(n){
 }
 function switchTab(t){
   curTab=t;
-  ['today','weight','history'].forEach(x=>{
+  ['today','weight','history','settings'].forEach(x=>{
     document.getElementById('view-'+x).style.display=x===t?'':'none';
     document.getElementById('tab-'+x).className=x===t?'on':'';
   });
   document.getElementById('datenav').style.display=t==='today'?'flex':'none';
-  if(t==='today')renderToday(); if(t==='weight')renderWeight(); if(t==='history')renderHistory();
+  if(t==='today')renderToday(); if(t==='weight')renderWeight(); if(t==='history')renderHistory(); if(t==='settings')renderSettings();
   renderHeader();
 }
 let toastTimer;
