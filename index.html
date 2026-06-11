@@ -227,7 +227,7 @@ function presetSelectHtml(d, sc){
   return `<select class="nm" onchange="applyPreset(${d},this.value)">${first}${presetOptionsHtml(sc)}</select>`;
 }
 function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
-const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼机 Stair Climber','椭圆机 Elliptical','HIIT','健身操 Aerobics','遛娃散步 Stroller Walk'];
+const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼 Stair Climb','HIIT','遛娃散步 Stroller Walk'];
 function cardioOptions(){ return CARDIO_TYPES.concat(db.customCardio||[]); }
 const MEALS = [
   {key:'breakfast', name:'早餐 Breakfast', time:'~8:30'},
@@ -253,7 +253,7 @@ const SNACK_OPTIONS = [
 ];
 function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.p:0); },0); }
 /* 运动消耗估算 burn estimates: kcal = MET × 体重kg × 小时 */
-const CARDIO_MET = [['爬楼机',8.5],['HIIT',8],['健身操',6.5],['单车',6],['游泳',6],['爬坡',5.3],['椭圆机',5],['快走',4.3],['遛娃',3.5]];
+const CARDIO_MET = [['爬楼',8.5],['HIIT',8],['健身操',6.5],['单车',6],['游泳',6],['爬坡',5.3],['椭圆机',5],['快走',4.3],['遛娃',3.5]];
 function metFor(type){ const f=CARDIO_MET.find(p=>type&&type.includes(p[0])); return f?f[1]:5; }
 function bodyWeightFor(ds){
   let d=ds;
@@ -500,8 +500,9 @@ function renderToday(){
     h += `<div class="card"><h2><span>🏃 有氧 Cardio</span>
       <span class="pill ${cd.done?'done':''}">${cd.done?'✓ '+cd.min+' min':'目标 '+((sch.cardio&&sch.cardio.min)||30)+' min'}</span></h2>
       <div class="chips">` +
-      cardioOptions().map(t=>`<button class="chip ${cd.type===t?'on':''}" onclick="setCardio('type','${t}')">${t}</button>`).join('') +
-      `<button class="chip" style="border-style:dashed;color:var(--teal)" onclick="addCardioType()">＋ 添加</button></div>
+      (function(){ const opts=cardioOptions(); if(cd.type && !opts.includes(cd.type)) opts.push(cd.type); return opts; })()
+        .map(t=>`<button class="chip ${cd.type===t?'on':''}" onclick="setCardio('type','${t}')">${t}</button>`).join('') +
+      `<button class="chip" style="border-style:dashed;color:var(--teal)" onclick="addCardioType()">✏️ 其他 Other</button></div>
       <div class="amounts"><div class="amt" style="max-width:160px;margin:0 auto"><div class="lbl">时长 Minutes</div><div class="ctl">
         <button onclick="setCardio('min',${cd.min-5})">−</button><span class="val">${cd.min}</span><button onclick="setCardio('min',${cd.min+5})">＋</button></div></div></div>
       <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">护膝有氧：快走/爬坡/椭圆机最佳 · 建议节奏：午休力量 + 晚8点有氧</div>
