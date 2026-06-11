@@ -796,7 +796,12 @@ function saveSettings(){
   toast('✓ 已保存 · 新目标 '+targets().kcalMax+' kcal');
 }
 function schedSet(wd,f,v){ const sc=db.schedule[wd];
-  if(f==='type') sc.type=v;
+  if(f==='type'){
+    sc.type=v;
+    if(v==='rest'){ sc.name='休息 Rest'; sc.ex=[]; sc.cardio=null; }       // 休息日: 无氧=无, 有氧=0
+    else if(!sc.cardio) sc.cardio={min:30};                                // 改回训练日: 有氧默认30分钟
+    save(); renderSettings(); toast('✓ 课表已保存'); return;
+  }
   else if(f==='name') sc.name=v;
   else if(f==='cardioMin'){ const n=parseInt(v)||0; sc.cardio=n>0?{min:n}:null; }
   save(); toast('✓ 课表已保存'); }
@@ -805,6 +810,7 @@ function applyPreset(wd,key){ if(!key) return;
   const sc=db.schedule[wd];
   sc.name=p.name; sc.ex=p.ex.slice();
   if(sc.type==='rest') sc.type='gym';
+  if(!sc.cardio) sc.cardio={min:30};
   save(); renderSettings(); toast('✓ 已应用 '+p.name); }
 function editEx(wd){ const sc=db.schedule[wd];
   const n=prompt('动作列表（逗号分隔）Exercises (comma-separated):', sc.ex.join(', '));
