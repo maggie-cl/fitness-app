@@ -253,6 +253,24 @@ const SNACK_OPTIONS = [
   {key:'tomato',  label:'🍅 小番茄/黄瓜',    kcal:30,  p:0}
 ];
 function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.p:0); },0); }
+/* 运动消耗估算 burn estimates: kcal = MET × 体重kg × 小时 */
+const CARDIO_MET = [['爬楼机',8.5],['HIIT',8],['健身操',6.5],['单车',6],['游泳',6],['爬坡',5.3],['椭圆机',5],['快走',4.3],['遛娃',3.5]];
+function metFor(type){ const f=CARDIO_MET.find(p=>type&&type.includes(p[0])); return f?f[1]:5; }
+function bodyWeightFor(ds){
+  let d=ds;
+  for(let i=0;i<60;i++){ const lg=db.logs[d]; if(lg&&lg.weight) return lg.weight; d=addDays(d,-1); }
+  return parseFloat(db.settings.startW)||65;
+}
+function dayBurn(ds){
+  const s=db.settings, kg=bodyWeightFor(ds);
+  const ht=parseInt(s.heightCm)||165, ag=parseInt(s.age)||30;
+  const bmr = 10*kg + 6.25*ht - 5*ag + (s.sex==='M'?5:-161);
+  const base = Math.round(bmr*(s.activity||1.4));            // 基础代谢+日常活动
+  const lg = db.logs[ds]||{};
+  const strength = (lg.workout&&lg.workout.done&&SCHED(parse(ds).getDay()).type!=='rest') ? Math.round(4.5*kg*0.5) : 0; // 力量约4.5MET×30min
+  const cardio = (lg.cardio&&lg.cardio.done) ? Math.round(metFor(lg.cardio.type)*kg*(lg.cardio.min||30)/60) : 0;
+  return {base, strength, cardio, total: base+strength+cardio};
+}
 function mealKcal(ml){
   if(ml.items) return ml.items.reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.kcal:0); },0);
   const d = (ml.proteins && ml.proteins.length)
@@ -504,6 +522,16 @@ function renderToday(){
     <div class="tot ${kOK?'ok':''}">热量 ≤${T.kcalMax}<b>${totK} ${kOK?'✓':''}</b></div>
   </div>
   <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">合计只算已打卡 ✓ 的餐 · 热量为估算，未含烹饪油（约 +100~150 kcal）</div></div>`;
+
+  /* --- calorie balance card --- */
+  const burn = dayBurn(ds), net = burn.total - totK;
+  h += `<div class="card"><h2><span>🔥 热量平衡 Calorie Balance</span><span class="sub">估算 estimated</span></h2>
+    <div class="daytotals">
+      <div class="tot">🍽️ 摄入 In<b>${totK}</b></div>
+      <div class="tot">🏃 消耗 Out<b>${burn.total}</b></div>
+      <div class="tot ${mealsDone>=3&&net>=350&&net<=800?'ok':''}">📉 缺口 Deficit<b>${mealsDone>0?net:'–'} ${mealsDone>=3&&net>=350&&net<=800?'✓':(mealsDone>=3&&net>800?'⚠️':'')}</b></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">消耗 = 基础代谢+日常 ${burn.base}${burn.strength?` + 力量 ${burn.strength}`:''}${burn.cardio?` + 有氧 ${burn.cardio}`:''}（按体重 ${bodyWeightFor(ds)}kg 估算）。每日缺口 400~700 kcal 减脂最稳，⚠️=缺口过大记得吃够；三餐都打卡后缺口才准确。</div></div>`;
 
   /* --- water card --- */
   const cups = lg.water||0, liters = Math.round(cups*CUP_L*10)/10;
