@@ -128,8 +128,8 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .cell.full{background:#dcfce7;}
 .cell.part{background:#fef9c3;}
 .weekcard{border-left:4px solid var(--teal);}
-.weekcard .wkrow{display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:var(--muted);}
-.weekcard .wkrow b{color:var(--text);}
+.wkrow{display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:var(--muted); gap:10px;}
+.wkrow b{color:var(--text); text-align:right;}
 /* tabs */
 nav{position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid var(--border);
   display:flex; z-index:10; padding-bottom:env(safe-area-inset-bottom);}
@@ -585,7 +585,7 @@ function renderToday(){
 
   v.innerHTML = h;
 }
-let swapIdx=null, expIdx=null;
+let swapIdx=null, expIdx=null, editingSettings=false, editingSched=false, calExpanded=false;
 function expandEx(i){ expIdx = expIdx===i?null:i; swapIdx=null; renderToday(); }
 /* 资深用户(打卡≥7天)自动隐藏说明横幅 hide tip banners after 7 check-in days */
 function checkinDays(){ return Object.keys(db.logs).filter(ds=>{ const st=dayStatus(ds); return st.wReal||st.m; }).length; }
@@ -800,7 +800,17 @@ function renderWeight(){
 /* ================= settings view ================= */
 function renderSettings(){
   const v=document.getElementById('view-settings');
-  let h=`<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
+  let h='';
+  if(profileComplete() && !editingSettings){
+    const s=db.settings, T=targets();
+    h += `<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><button class="exbtn" onclick="editingSettings=true;renderSettings()">✏️ 编辑 Edit</button></h2>
+      <div class="wkrow"><span>👤 ${s.name||'—'}</span><b>${s.sex==='M'?'男 M':'女 F'} · ${s.age}岁 · ${s.heightCm}cm</b></div>
+      <div class="wkrow"><span>🎯 体重 Weight</span><b>${s.startW} → ${s.endW} kg</b></div>
+      <div class="wkrow"><span>📅 计划 Plan</span><b>${s.weeks} 周 · ${s.startDate} 开始</b></div>
+      <div class="wkrow"><span>📌 每日目标 Targets</span><b>≤${T.kcalMax} kcal · 蛋白≥${fist(T.protein)}拳 · 水${T.waterL}L</b></div>
+    </div>`;
+  } else {
+  h += `<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
     <div class="planset">
       <div><label>昵称 Name（显示在标题）</label><input type="text" id="setName" value="${(db.settings.name||'').replace(/"/g,'&quot;')}" placeholder="你的名字"></div>
       <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${db.settings.startW||''}" placeholder="如 65"></div>
@@ -821,8 +831,15 @@ function renderSettings(){
     <div style="font-size:11px;color:var(--muted);margin-top:8px">${profileComplete()
       ? `根据资料自动计算目标：热量 ≤${targets().kcalMax} kcal · 蛋白质类 ≥${targets().protein}g/天（Mifflin-St Jeor 公式，每日约500千卡缺口）。`
       : `填写并保存资料后，热量/蛋白质目标会自动按你的情况计算。Fill & save your profile to get personalized targets.`}饮食/课表建议仅供参考，不构成医疗建议。</div>
-  </div>
-  <div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/部位/动作/有氧</span></h2>
+  </div>`;
+  }
+  if(!editingSched){
+    h += `<div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><button class="exbtn" onclick="editingSched=true;renderSettings()">✏️ 编辑 Edit</button></h2>` +
+      [1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
+        return `<div class="wkrow"><span>${['周日','周一','周二','周三','周四','周五','周六'][d]}</span><b>${TYPE_ICON[sc.type]||''} ${sc.type==='rest'?'休息 Rest':sc.name}${sc.cardio?` · 🏃${sc.cardio.min}min`:''}</b></div>`;
+      }).join('') + `</div>`;
+  } else {
+  h += `<div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/部位/动作/有氧</span></h2>
     ${[1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
       return `<div class="schedrow">
         <div class="r1"><span class="day">${['周日','周一','周二','周三','周四','周五','周六'][d]}</span>
@@ -835,8 +852,10 @@ function renderSettings(){
           <span>有氧</span><input class="cmin" type="number" inputmode="numeric" value="${sc.cardio?sc.cardio.min:0}" onchange="schedSet(${d},'cardioMin',this.value)"><span>分钟（0=无）</span></div>
       </div>`;}).join('')}
     <div style="font-size:11px;color:var(--muted);margin-top:8px">改动对还没打开过的日期生效。Changes apply to days you haven't opened yet.</div>
-  </div>
-  <div class="card"><h2>🗂️ 数据 Data</h2><div class="settings">
+    <button class="bigbtn" onclick="editingSched=false;renderSettings()">完成 Done</button>
+  </div>`;
+  }
+  h += `<div class="card"><h2>🗂️ 数据 Data</h2><div class="settings">
     <button onclick="exportData()">⬇️ 导出备份 Export</button>
     <button onclick="document.getElementById('importFile').click()">⬆️ 导入 Import</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
@@ -891,6 +910,7 @@ function saveSettings(){
   wl=Math.min(6, Math.max(1, wl));
   db.settings = Object.assign({}, db.settings, {startDate:sd, weeks:wk, startW:sw, endW:ew, heightCm:ht, age:ag, sex:sx, activity:ac, name:nm, waterL:wl});
   applySettings(); save();
+  editingSettings=false;
   renderHeader(); renderSettings();
   toast('✓ 已保存 · 新目标 '+targets().kcalMax+' kcal');
 }
@@ -948,9 +968,11 @@ function renderHistory(){
   const v=document.getElementById('view-history');
   let h=`<div class="card"><h2><span>📅 打卡日历 Calendar</span><span class="sub">绿=全完成 黄=部分</span></h2><div class="cal">`;
   ['一','二','三','四','五','六','日'].forEach(d=>h+=`<div class="hd">${d}</div>`);
-  // calendar spans Monday of start week → Sunday of final week
+  // calendar: 默认只展开到当前周 collapsed to current week by default
   let ds=addDays(PLAN_START, -((parse(PLAN_START).getDay()+6)%7));
-  const calEnd=addDays(PLAN_END, 6-((parse(PLAN_END).getDay()+6)%7));
+  const fullEnd=addDays(PLAN_END, 6-((parse(PLAN_END).getDay()+6)%7));
+  const nowEnd=addDays(TODAY, 6-((parse(TODAY).getDay()+6)%7));
+  const calEnd=(calExpanded || parse(nowEnd)>=parse(fullEnd)) ? fullEnd : nowEnd;
   while(parse(ds)<=parse(calEnd)){
     const st=dayStatus(ds), inPlan=parse(ds)>=parse(PLAN_START)&&parse(ds)<=parse(PLAN_END);
     const future=parse(ds)>parse(TODAY);
@@ -961,7 +983,10 @@ function renderHistory(){
       <span class="d">${d.getMonth()+1}/${d.getDate()}</span></div>`;
     ds=addDays(ds,1);
   }
-  h+=`</div><div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">点任意日期可补打卡 Tap a day to backfill</div></div>`;
+  h+=`</div>`;
+  if(parse(fullEnd)>parse(calEnd)) h+=`<button class="addex" onclick="calExpanded=true;renderHistory()">▾ 展开完整 ${db.settings.weeks} 周 Show all weeks</button>`;
+  else if(calExpanded) h+=`<button class="addex" onclick="calExpanded=false;renderHistory()">▴ 收起 Collapse</button>`;
+  h+=`<div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">点任意日期可补打卡 Tap a day to backfill</div></div>`;
 
   /* weekly reports */
   h+=`<h2 style="font-size:15px;margin:4px 0 10px">📊 周报 Weekly Report</h2>`;
