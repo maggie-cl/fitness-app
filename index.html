@@ -252,14 +252,51 @@ const SNACK_OPTIONS = [
   {key:'egg',     label:'🥚 鸡蛋×1',        kcal:78,  p:50},
   {key:'yogurt',  label:'🥛 酸奶一杯',       kcal:120, p:100},
   {key:'apple',   label:'🍎 苹果',          kcal:95,  p:0},
-  {key:'shake',   label:'🥤 蛋白粉一勺',     kcal:120, p:50},
   {key:'nuts',    label:'🥜 坚果一小把',     kcal:170, p:0},
   {key:'banana',  label:'🍌 香蕉',          kcal:105, p:0},
-  {key:'cheese',  label:'🧀 奶酪棒',        kcal:80,  p:25},
   {key:'jerky',   label:'🥩 牛肉干一小包',   kcal:90,  p:30},
   {key:'tomato',  label:'🍅 小番茄/黄瓜',    kcal:30,  p:0}
 ];
-function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.p:0); },0); }
+/* 已下架但需为历史记录保留估值 retired options kept for old logs */
+const SNACK_HIDDEN = [
+  {key:'shake', label:'🥤 蛋白粉一勺', kcal:120, p:50},
+  {key:'cheese', label:'🧀 奶酪棒', kcal:80, p:25},
+  {key:'edamame', label:'🫘 毛豆一碗', kcal:120, p:50}
+];
+function snackOpt(k){ return SNACK_OPTIONS.concat(db.customSnacks||[], SNACK_HIDDEN).find(x=>x.key===k); }
+function snackP(ml){ return (ml.items||[]).reduce((s,k)=>{ const o=snackOpt(k); return s+(o?o.p:0); },0); }
+/* 常见食物热量库（一份的量）用于自定义加餐自动估算 mini food-kcal DB for custom snacks */
+const FOOD_KCAL_DB = [
+  ['黄瓜',20,0],['西红柿',25,0],['番茄',25,0],['圣女果',30,0],['西瓜',60,0],['草莓',45,0],['蓝莓',60,0],['葡萄',85,0],
+  ['橙',65,0],['橘',55,0],['柚',70,0],['桃',55,0],['梨',85,0],['猕猴桃',55,0],['芒果',90,0],['火龙果',85,0],['樱桃',70,0],['水果',80,0],
+  ['鸡蛋白',35,30],['鸡胸',110,80],['牛肉干',90,30],['肉干',90,30],['豆干',80,40],['豆浆',70,30],['脱脂奶',85,80],['牛奶',150,80],['酸奶',120,100],
+  ['蛋白棒',200,40],['能量棒',200,20],['蛋白粉',120,50],['奶酪',80,25],['毛豆',120,50],
+  ['坚果',170,0],['核桃',130,0],['杏仁',105,0],['腰果',155,0],['花生',160,0],['开心果',120,0],
+  ['玉米',110,0],['红薯',90,0],['紫薯',90,0],['山药',60,0],['全麦面包',80,10],['面包',155,5],['苏打饼干',125,0],['饼干',150,0],
+  ['黑巧',115,0],['巧克力',150,0],['海苔',30,0],['魔芋',20,0],['奶茶',350,0],['拿铁',130,40],['美式',10,0],['咖啡',10,0],['蛋糕',260,0]
+];
+function addSnackOption(){
+  const n=prompt('食物名称 Food name（如: 橙子、全麦面包、蛋白棒）:'); if(!n||!n.trim()) return;
+  const name=n.trim().replace(/['"<>`\\]/g,'');
+  if(!db.customSnacks) db.customSnacks=[];
+  let opt=db.customSnacks.find(o=>o.key==='c_'+name);
+  if(!opt){
+    const hit=FOOD_KCAL_DB.find(f=>name.includes(f[0]));
+    let kcal, p=0;
+    if(hit){ kcal=hit[1]; p=hit[2]; }
+    else { kcal=parseInt(prompt(`没认出「${name}」，输入一份的估算热量 kcal:`, '100'))||100; }
+    opt={key:'c_'+name, label:'🍴 '+name, kcal:kcal, p:p};
+    db.customSnacks.push(opt);
+  }
+  const m=getMeal('snack'); if(!m.items) m.items=[];
+  if(!m.items.includes(opt.key)) m.items.push(opt.key);
+  save(); renderToday(); toast(`✓ ${name} ≈${opt.kcal} kcal`);
+}
+function removeSnack(){
+  const lg=dayLog(curDate);
+  if(lg.meals && lg.meals.snack){ lg.meals.snack.visible=false; lg.meals.snack.done=false; lg.meals.snack.items=[]; }
+  save(); renderToday(); renderHeader();
+}
 /* 运动消耗估算 burn estimates: kcal = MET × 体重kg × 小时 */
 const CARDIO_MET = [['爬楼',8.5],['HIIT',8],['健身操',6.5],['单车',6],['游泳',6],['爬坡',5.3],['椭圆机',5],['快走',4.3],['遛娃',3.5]];
 function metFor(type){ const f=CARDIO_MET.find(p=>type&&type.includes(p[0])); return f?f[1]:5; }
@@ -279,7 +316,7 @@ function dayBurn(ds){
   return {base, strength, cardio, total: base+strength+cardio};
 }
 function mealKcal(ml){
-  if(ml.items) return ml.items.reduce((s,k)=>{ const o=SNACK_OPTIONS.find(x=>x.key===k); return s+(o?o.kcal:0); },0);
+  if(ml.items) return ml.items.reduce((s,k)=>{ const o=snackOpt(k); return s+(o?o.kcal:0); },0);
   const d = (ml.proteins && ml.proteins.length)
     ? ml.proteins.reduce((s,k)=>s+(KCAL_PER_G[k]||KCAL_PROTEIN_DEFAULT),0)/ml.proteins.length
     : KCAL_PROTEIN_DEFAULT;
@@ -308,6 +345,7 @@ function applySettings(){
   W_START = parseFloat(s.startW)||0; W_END = parseFloat(s.endW)||0;
   if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   if(!db.customCardio) db.customCardio = [];
+  if(!db.customSnacks) db.customSnacks = [];
   // migration: WFH strength moved 8:00 → 12:00; lower-day renamed
   [3,5].forEach(d=>{ if(db.schedule[d] && db.schedule[d].where==='8:00 · 家 Home') db.schedule[d].where='12:00 · 家 Home'; });
   Object.keys(db.schedule).forEach(d=>{ if(db.schedule[d].name==='下肢 Lower (护膝版)') db.schedule[d].name='下肢/臀腿 Lower & Glutes (护膝)';
@@ -531,9 +569,12 @@ function renderToday(){
     h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time} · ≈${mealKcal(ml)} kcal</span></span>
       <button class="excheck ${ml.done?'on':''}" onclick="toggleMealDone('${m.key}')">${ml.done?'✓':''}</button></div>`;
     if(m.key==='snack'){
+      const shown = SNACK_OPTIONS.concat(db.customSnacks||[]);
+      (ml.items||[]).forEach(k=>{ if(!shown.some(o=>o.key===k)){ const o=snackOpt(k); if(o) shown.push(o); } });
       h += `<div class="chips">` +
-        SNACK_OPTIONS.map(o=>`<button class="chip ${(ml.items||[]).includes(o.key)?'on':''}" onclick="toggleSnackItem('${o.key}')">${o.label} ${o.kcal}</button>`).join('') +
-        `</div></div>`;
+        shown.map(o=>`<button class="chip ${(ml.items||[]).includes(o.key)?'on':''}" onclick="toggleSnackItem('${o.key}')">${o.label} ${o.kcal}</button>`).join('') +
+        `<button class="chip" style="border-style:dashed;color:var(--teal)" onclick="addSnackOption()">✏️ 自定义</button></div>
+        <button class="addex" style="color:var(--muted);border-color:var(--border)" onclick="removeSnack()">✕ 取消加餐 Remove snack</button></div>`;
       return;
     }
     h += `<div class="amounts">
