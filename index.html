@@ -406,7 +406,17 @@ function getWorkout(ds){
   const lg = dayLog(ds);
   if(!lg.workout){
     const sch = SCHED(parse(ds).getDay());
-    lg.workout = {done:false, time:'', ex:sch.ex.map(n=>{
+    // sticky preference: 沿用上一次同部位打卡的动作清单 reuse last checked-in exercise list for this focus
+    let names = sch.ex;
+    let d = addDays(ds,-1);
+    for(let i=0;i<90;i++){
+      const plg = db.logs[d];
+      if(plg && plg.workout && plg.workout.done && plg.workout.name===sch.name && plg.workout.ex && plg.workout.ex.length){
+        names = plg.workout.ex.map(e=>e.name); break;
+      }
+      d = addDays(d,-1);
+    }
+    lg.workout = {done:false, time:'', name:sch.name, ex:names.map(n=>{
       const sg = suggestFor(n, ds);
       return {name:n, weight:sg.weight ? String(sg.weight) : '', reps:String(sg.reps), sets:String(sg.sets), done:false};
     })};
