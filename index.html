@@ -134,8 +134,10 @@ nav button{flex:1; padding:9px 0 7px; border:none; background:none; font-size:11
 nav button .ico{display:block; font-size:20px; margin-bottom:1px;}
 nav button.on{color:var(--teal); font-weight:700;}
 .planset{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.planset > div{min-width:0;}
 .planset label{font-size:11px; color:var(--muted); display:block; margin-bottom:3px;}
-.planset input{width:100%; padding:9px; border:1px solid var(--border); border-radius:10px; font-size:15px;}
+.planset input{width:100%; min-width:0; padding:9px; border:1px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;}
+.planset input[type=date]{-webkit-appearance:none; appearance:none; background:#fff; min-height:40px; text-align:left;}
 .settings{display:flex; gap:8px; margin-top:4px;}
 .settings button{flex:1; padding:9px; border:1px solid var(--border); background:var(--card);
   border-radius:10px; font-size:13px; color:var(--muted); cursor:pointer;}
@@ -176,7 +178,8 @@ nav button.on{color:var(--teal); font-weight:700;}
 
 <script>
 /* ================= data ================= */
-const DEF_SETTINGS = {startDate:'2026-06-10', weeks:6, startW:75, endW:70.5, heightCm:174, age:32, sex:'F', activity:1.4, name:'Maggie'};
+/* 新用户默认空白，开始日期=今天 blank defaults for new users; start date = today */
+const DEF_SETTINGS = {startDate:'', weeks:6, startW:'', endW:'', heightCm:'', age:'', sex:'F', activity:1.4, name:''};
 let PLAN_START, PLAN_END, W_START, W_END;
 const STORE_KEY = 'fitness6w_v1';
 /* 护膝版默认课表（可在设置中编辑）：30min无氧+30min有氧/天 knee-friendly default, editable */
@@ -275,8 +278,9 @@ function weekNum(ds){ return Math.floor((parse(ds)-parse(PLAN_START))/864e5/7)+1
 function applySettings(){
   db.settings = Object.assign({}, DEF_SETTINGS, db.settings||{});
   const s = db.settings;
+  if(!s.startDate) s.startDate = TODAY;
   PLAN_START = s.startDate; PLAN_END = addDays(s.startDate, s.weeks*7-1);
-  W_START = s.startW; W_END = s.endW;
+  W_START = parseFloat(s.startW)||0; W_END = parseFloat(s.endW)||0;
   if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   if(!db.customCardio) db.customCardio = [];
   // migration: WFH strength moved 8:00 → 12:00; lower-day renamed
@@ -286,11 +290,14 @@ function applySettings(){
 }
 applySettings();
 /* 个人资料→自动计算目标 profile-driven targets (Mifflin-St Jeor, -500 kcal deficit) */
+function profileComplete(){ const s=db.settings; return !!(parseFloat(s.startW)&&parseFloat(s.endW)&&parseInt(s.heightCm)&&parseInt(s.age)); }
 function targets(){
   const s = db.settings;
-  const bmr = 10*s.startW + 6.25*(s.heightCm||174) - 5*(s.age||32) + (s.sex==='M'?5:-161);
+  // 资料未填时用通用回退值 generic fallbacks until profile is filled
+  const sw=parseFloat(s.startW)||65, ew=parseFloat(s.endW)||60, ht=parseInt(s.heightCm)||165, ag=parseInt(s.age)||30;
+  const bmr = 10*sw + 6.25*ht - 5*ag + (s.sex==='M'?5:-161);
   const kcal = Math.max(1200, Math.round((bmr*(s.activity||1.4) - 500)/25)*25);
-  const protein = Math.round((s.endW*1.6/0.25)/50)*50;  // 1.6g蛋白/kg目标体重 ÷ 平均25%含量 → 食物克数
+  const protein = Math.round((ew*1.6/0.25)/50)*50;  // 1.6g蛋白/kg目标体重 ÷ 平均25%含量 → 食物克数
   const carbs = Math.min(400, Math.max(100, Math.round((kcal*0.30/KCAL_CARB)/50)*50));
   return {protein:protein, carbsMax:carbs, veg:400, waterL:3, kcalMax:kcal};
 }
@@ -393,6 +400,14 @@ function renderToday(){
   const ds = curDate, wd = parse(ds).getDay(), sch = SCHED(wd);
   const lg = dayLog(ds), w = getWorkout(ds);
   let h = '';
+
+  /* --- onboarding banner for new users --- */
+  if(!profileComplete()){
+    h += `<div class="card" style="border-color:#fde68a;background:#fffbeb">
+      <h2>👋 欢迎 Welcome!</h2>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:4px">先填写身高/体重/目标等个人资料，饮食和热量目标会自动按你的情况计算。Fill in your profile first — calorie & protein targets are computed from it.</div>
+      <button class="bigbtn" onclick="switchTab('settings')">去设置 Go to Settings →</button></div>`;
+  }
 
   /* --- workout card --- */
   h += `<div class="card"><h2><span>${TYPE_ICON[sch.type]||'💪'} ${sch.name}</span>
@@ -632,18 +647,19 @@ function renderWeight(){
   const pts=weightSeries(), ma=movingAvg(pts);
   const latest=pts.length?pts[pts.length-1]:null;
   const avg7=ma.length?ma[ma.length-1].w:null;
-  const lost=latest?Math.round((W_START-latest.w)*10)/10:0;
-  const totalDays=(parse(PLAN_END)-parse(PLAN_START))/864e5;
+  const hasGoal = W_START>0 && W_END>0;
+  const lost=(latest&&hasGoal)?Math.round((W_START-latest.w)*10)/10:null;
+  const totalDays=(parse(PLAN_END)-parse(PLAN_START))/864e5 || 1;
   const dayIdx=Math.min(totalDays,Math.max(0,(parse(TODAY)-parse(PLAN_START))/864e5));
-  const targetNow=Math.round((W_START-(W_START-W_END)*dayIdx/totalDays)*10)/10;
+  const targetNow=hasGoal?Math.round((W_START-(W_START-W_END)*dayIdx/totalDays)*10)/10:null;
 
   let h=`<div class="wstats">
     <div class="wstat"><div class="lbl">当前 Current</div><div class="val">${latest?latest.w:'–'}<small> kg</small></div></div>
     <div class="wstat"><div class="lbl">7日均 7d Avg</div><div class="val">${avg7??'–'}<small> kg</small></div></div>
-    <div class="wstat"><div class="lbl">已减 Lost</div><div class="val" style="color:var(--green)">${latest?'-'+lost:'–'}<small> kg</small></div></div>
-    <div class="wstat"><div class="lbl">目标线 Target</div><div class="val" style="color:var(--amber)">${targetNow}<small> kg</small></div></div>
+    <div class="wstat"><div class="lbl">已减 Lost</div><div class="val" style="color:var(--green)">${lost!==null?'-'+lost:'–'}<small> kg</small></div></div>
+    <div class="wstat"><div class="lbl">目标线 Target</div><div class="val" style="color:var(--amber)">${targetNow??'–'}<small> kg</small></div></div>
   </div>
-  <div class="card"><h2><span>📉 体重趋势 Trend</span><span class="sub">${W_START} → ${W_END} kg</span></h2>
+  <div class="card"><h2><span>📉 体重趋势 Trend</span><span class="sub">${hasGoal?W_START+' → '+W_END+' kg':'先在设置填目标'}</span></h2>
   ${chartSVG(pts,ma)}
   <div class="legend"><span><i style="background:#0d9488"></i>每日 Daily</span>
   <span><i style="background:#2563eb"></i>7日均线 7d Avg</span>
@@ -663,12 +679,12 @@ function renderSettings(){
   let h=`<div class="card"><h2><span>⚙️ 计划设置 Plan Settings</span><span class="sub">可随时修改</span></h2>
     <div class="planset">
       <div><label>昵称 Name（显示在标题）</label><input type="text" id="setName" value="${(db.settings.name||'').replace(/"/g,'&quot;')}" placeholder="你的名字"></div>
-      <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${W_START}"></div>
-      <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${W_END}"></div>
+      <div><label>起始体重 Start (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setStartW" value="${db.settings.startW||''}" placeholder="如 65"></div>
+      <div><label>目标体重 Goal (kg)</label><input type="number" inputmode="decimal" step="0.1" id="setEndW" value="${db.settings.endW||''}" placeholder="如 60"></div>
       <div><label>计划周数 Weeks</label><input type="number" inputmode="numeric" id="setWeeks" value="${db.settings.weeks}"></div>
       <div><label>开始日期 Start date</label><input type="date" id="setStartDate" value="${PLAN_START}"></div>
-      <div><label>身高 Height (cm)</label><input type="number" inputmode="numeric" id="setHeight" value="${db.settings.heightCm}"></div>
-      <div><label>年龄 Age</label><input type="number" inputmode="numeric" id="setAge" value="${db.settings.age}"></div>
+      <div><label>身高 Height (cm)</label><input type="number" inputmode="numeric" id="setHeight" value="${db.settings.heightCm||''}" placeholder="如 165"></div>
+      <div><label>年龄 Age</label><input type="number" inputmode="numeric" id="setAge" value="${db.settings.age||''}" placeholder="如 30"></div>
       <div><label>性别 Sex</label><select id="setSex" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;font-size:15px">
         <option value="F" ${db.settings.sex!=='M'?'selected':''}>女 F</option><option value="M" ${db.settings.sex==='M'?'selected':''}>男 M</option></select></div>
       <div><label>日常活动量 Activity</label><select id="setActivity" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;font-size:15px">
@@ -677,7 +693,9 @@ function renderSettings(){
         <option value="1.55" ${db.settings.activity==1.55?'selected':''}>中度 Moderate</option></select></div>
     </div>
     <button class="bigbtn" onclick="saveSettings()">保存设置 Save settings</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">根据资料自动计算目标：热量 ≤${targets().kcalMax} kcal · 蛋白质类 ≥${targets().protein}g/天（Mifflin-St Jeor 公式，每日约500千卡缺口）。饮食/课表建议仅供参考，不构成医疗建议。</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">${profileComplete()
+      ? `根据资料自动计算目标：热量 ≤${targets().kcalMax} kcal · 蛋白质类 ≥${targets().protein}g/天（Mifflin-St Jeor 公式，每日约500千卡缺口）。`
+      : `填写并保存资料后，热量/蛋白质目标会自动按你的情况计算。Fill & save your profile to get personalized targets.`}饮食/课表建议仅供参考，不构成医疗建议。</div>
   </div>
   <div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/部位/动作/有氧</span></h2>
     ${[1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
@@ -703,7 +721,8 @@ function renderSettings(){
 function chartSVG(pts,ma){
   const W=440,H=240,L=38,R=10,T=14,B=24;
   const t0=parse(PLAN_START).getTime(), t1=parse(PLAN_END).getTime();
-  let ws=[W_END,W_START,...pts.map(p=>p.w)];
+  let ws=[W_END,W_START,...pts.map(p=>p.w)].filter(v=>v>0);
+  if(!ws.length) ws=[60,80];
   let ymin=Math.floor(Math.min(...ws))-0.5, ymax=Math.ceil(Math.max(...ws))+0.5;
   const X=t=>L+(t-t0)/(t1-t0)*(W-L-R);
   const Y=w=>T+(ymax-w)/(ymax-ymin)*(H-T-B);
@@ -719,8 +738,8 @@ function chartSVG(pts,ma){
     const t=t0+i*7*864e5; if(t>t1)break;
     s+=`<text x="${X(t)}" y="${H-8}" font-size="9" fill="#94a3b8" text-anchor="middle">${i===0?(d0.getMonth()+1)+'/'+d0.getDate():'W'+(i+1)}</text>`;
   }
-  // target line
-  s+=`<line x1="${X(t0)}" y1="${Y(W_START)}" x2="${X(t1)}" y2="${Y(W_END)}" stroke="#d97706" stroke-width="2" stroke-dasharray="6 4" opacity=".8"/>`;
+  // target line (only when goal is set)
+  if(W_START>0&&W_END>0) s+=`<line x1="${X(t0)}" y1="${Y(W_START)}" x2="${X(t1)}" y2="${Y(W_END)}" stroke="#d97706" stroke-width="2" stroke-dasharray="6 4" opacity=".8"/>`;
   // MA line
   if(ma.length>1) s+=`<polyline points="${ma.map(p=>X(parse(p.ds).getTime())+','+Y(p.w)).join(' ')}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round"/>`;
   // daily points + thin line
