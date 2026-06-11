@@ -144,6 +144,14 @@ nav button.on{color:var(--teal); font-weight:700;}
 .settings{display:flex; gap:8px; margin-top:4px;}
 .settings button{flex:1; padding:9px; border:1px solid var(--border); background:var(--card);
   border-radius:10px; font-size:13px; color:var(--muted); cursor:pointer;}
+.confetti{position:fixed; top:-14px; width:9px; height:14px; z-index:50; pointer-events:none;
+  animation:confall 2.5s ease-in forwards; border-radius:2px;}
+@keyframes confall{to{transform:translateY(106vh) rotate(720deg); opacity:.85;}}
+.milestone{position:fixed; top:38%; left:50%; transform:translateX(-50%); background:#fff;
+  border:2px solid var(--teal); color:var(--teal-dark); font-size:16px; font-weight:800;
+  padding:14px 20px; border-radius:16px; box-shadow:0 8px 30px rgba(0,0,0,.18); z-index:51;
+  animation:mpop .3s ease; text-align:center; max-width:85vw;}
+@keyframes mpop{from{transform:translateX(-50%) scale(.6); opacity:0;}}
 .toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--text);
   color:#fff; padding:9px 18px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:20; white-space:nowrap;}
 .toast.show{opacity:1;}
@@ -604,7 +612,7 @@ function toggleWorkoutDone(){
   const w=getWorkout(curDate); w.done=!w.done;
   if(w.done && !w.time){ const n=new Date(); w.time=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); }
   save(); renderToday(); renderHeader();
-  if(w.done) toast('💪 运动打卡成功！Nice work!');
+  if(w.done){ toast('💪 运动打卡成功！Nice work!'); checkMilestones(); }
 }
 function getMeal(k){ const lg=dayLog(curDate); if(!lg.meals) lg.meals={};
   if(!lg.meals[k]) lg.meals[k]=Object.assign({proteins:[], done:false}, mealDefault(k));
@@ -624,6 +632,40 @@ function addCardioType(){
   if(!cardioOptions().includes(name)) db.customCardio.push(name);
   setCardio('type', name);
 }
+/* 里程碑庆祝 milestones */
+function celebrate(msg){
+  const colors=['#0d9488','#f59e0b','#ef4444','#3b82f6','#a855f7','#22c55e'];
+  for(let i=0;i<50;i++){
+    const c=document.createElement('div'); c.className='confetti';
+    c.style.left=Math.random()*100+'vw';
+    c.style.background=colors[i%colors.length];
+    c.style.animationDelay=(Math.random()*0.7)+'s';
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),3400);
+  }
+  const b=document.createElement('div'); b.className='milestone'; b.innerHTML=msg;
+  document.body.appendChild(b); setTimeout(()=>b.remove(),3000);
+  if(navigator.vibrate) navigator.vibrate([100,50,100]);
+}
+function checkMilestones(){
+  if(!db.milestones) db.milestones={};
+  const fire=[];
+  const s=streak();
+  [3,7,14,21,30,60,90].forEach(n=>{ if(s>=n && !db.milestones['streak'+n]){ db.milestones['streak'+n]=1; fire.push(`🔥 连续打卡 ${n} 天！`); } });
+  if(W_START>0){
+    const pts=weightSeries();
+    if(pts.length){
+      const lost=W_START-pts[pts.length-1].w;
+      for(let k=1;k<=Math.floor(lost);k++){ if(!db.milestones['kg'+k]){ db.milestones['kg'+k]=1; fire.push(`🎉 已减 ${k} kg！加油！`); } }
+    }
+  }
+  const wp=waistSeries();
+  if(wp.length>1){
+    const wlost=wp[0].w-wp[wp.length-1].w;
+    for(let k=2;k<=Math.floor(wlost);k+=2){ if(!db.milestones['waist'+k]){ db.milestones['waist'+k]=1; fire.push(`📏 腰围已减 ${k} cm！`); } }
+  }
+  if(fire.length){ save(); celebrate(fire.join('<br>')); }
+}
 /* rest timer */
 let restInt=null, restEnd=0, audioCtx=null;
 function beep(){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();
@@ -637,7 +679,7 @@ function tickRest(){ const el=document.getElementById('restDisp'); if(!el){ clea
     setTimeout(()=>{ const e2=document.getElementById('restDisp'); if(e2) e2.textContent='⏱ 组间休息 Rest timer'; },4000); }
   else el.textContent='⏱ '+left+' 秒 …'; }
 function toggleMealDone(k){ const m=getMeal(k); m.done=!m.done; save(); renderToday(); renderHeader();
-  if(m.done) toast('🍽️ 已打卡'); }
+  if(m.done){ toast('🍽️ 已打卡'); checkMilestones(); } }
 function addSnack(){ getMeal('snack').visible=true; save(); renderToday(); }
 function toggleSnackItem(k){ const m=getMeal('snack');
   if(!m.items) m.items=[];
@@ -655,6 +697,7 @@ function saveBody(suffix){
   if(wOK) lg.weight=w; if(sOK) lg.waist=s;
   save(); toast('✓ 已记录 '+(wOK?w+'kg ':'')+(sOK?s+'cm':''));
   renderToday(); if(curTab==='weight') renderWeight(); renderHeader();
+  checkMilestones();
 }
 
 /* ================= weight view ================= */
@@ -682,6 +725,25 @@ function waistCard(){
     s+='</svg>'; inner=s;
   }
   return `<div class="card"><h2><span>📏 腰围 Waist (cm)</span><span class="sub">${cur!==null?cur+' cm'+(delta?` · ${delta>0?'+':''}${delta} cm`:''):'每周一次'}</span></h2>${inner}</div>`;
+}
+/* 达标预测：对最近14天体重做线性回归外推 project goal date from recent trend */
+function projection(){
+  const pts=weightSeries(); if(pts.length<3) return {state:'nodata'};
+  const lastT=parse(pts[pts.length-1].ds).getTime();
+  const win=pts.filter(p=>lastT-parse(p.ds).getTime()<=13*864e5);
+  if(win.length<3 || (lastT-parse(win[0].ds).getTime())<4*864e5) return {state:'nodata'};
+  const xs=win.map(p=>parse(p.ds).getTime()/864e5), ys=win.map(p=>p.w);
+  const n=xs.length, mx=xs.reduce((a,b)=>a+b)/n, my=ys.reduce((a,b)=>a+b)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num+=(xs[i]-mx)*(ys[i]-my); den+=(xs[i]-mx)*(xs[i]-mx); }
+  const slope=num/den; // kg/天
+  const cur=ys[ys.length-1];
+  if(!(W_END>0)) return {state:'nogoal'};
+  if(cur<=W_END) return {state:'done'};
+  if(slope>=-0.005) return {state:'flat'};
+  const days=Math.round((cur-W_END)/(-slope));
+  if(days>365) return {state:'flat'};
+  return {state:'ok', eta:addDays(TODAY,days), weekly:Math.round(-slope*7*100)/100};
 }
 function weightSeries(){
   const pts=[]; let ds=PLAN_START;
@@ -717,7 +779,15 @@ function renderWeight(){
   ${chartSVG(pts,ma)}
   <div class="legend"><span><i style="background:#0d9488"></i>每日 Daily</span>
   <span><i style="background:#2563eb"></i>7日均线 7d Avg</span>
-  <span><i style="background:#d97706"></i>目标 Target</span></div></div>
+  <span><i style="background:#d97706"></i>目标 Target</span></div>
+  ${(function(){ const pj=projection();
+    const t = pj.state==='ok' ? `📈 按当前速度（约 -${pj.weekly} kg/周），预计 <b>${parseInt(pj.eta.slice(5,7))}月${parseInt(pj.eta.slice(8))}日</b> 达到 ${W_END} kg`
+      : pj.state==='done' ? '🎉 已达到目标体重！Goal reached!'
+      : pj.state==='flat' ? '📊 近期趋势持平——体重波动正常，坚持记录几天再看'
+      : pj.state==='nogoal' ? ''
+      : '⏳ 记录满 5 天体重后，这里会显示达标日期预测';
+    return t?`<div style="font-size:12px;color:var(--text);background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:8px 10px;margin-top:10px;text-align:center">${t}</div>`:'';
+  })()}</div>
   <div class="card"><h2>⚖️ 记录 Log（${curDate===TODAY?'今天':curDate}）</h2>
     <div class="weightinput"><input type="number" inputmode="decimal" step="0.1" placeholder="体重 kg" id="wInTab">
     <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm" id="waistInTab">
