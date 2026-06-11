@@ -348,6 +348,21 @@ const EX_DEFAULTS = {
   '死虫式 Dead Bug':[0,10,3], '鸟狗式 Bird Dog':[0,10,3], '侧平板 Side Plank':[0,25,3], '原地快走 March in Place':[0,40,4]
 };
 const GENERIC_DEFAULT = [2.5,10,4];
+/* 起始重量轻量个性化：默认值按75kg女性标定，按性别×体重缩放 scale starting weights by sex & bodyweight (baseline: 75kg female) */
+function startWeightScale(ds){
+  const s = db.settings;
+  const sexF = s.sex==='M' ? 1.5 : 1;
+  let kg = null, d = ds;
+  for(let i=0;i<60;i++){ const lg=db.logs[d]; if(lg&&lg.weight){ kg=lg.weight; break; } d=addDays(d,-1); }
+  kg = kg || parseFloat(s.startW) || 0;
+  const bwF = kg ? Math.min(1.3, Math.max(0.8, kg/75)) : 1;
+  return sexF*bwF;
+}
+function scaleStartW(w, ds){
+  if(!w) return 0;
+  const sw = w*startWeightScale(ds);
+  return sw>=15 ? Math.round(sw/2.5)*2.5 : Math.round(sw*2)/2; // 大重量取2.5整数倍, 小哑铃取0.5
+}
 /* 同肌群护膝替代动作 knee-friendly alternatives by muscle group */
 const ALTS = {
   '罗马尼亚硬拉 RDL':['腿弯举 Leg Curl','早安式 Good Morning','单腿臀桥 Single-leg Glute Bridge'],
@@ -380,7 +395,7 @@ const ALTS = {
 function suggestFor(name, ds){
   const last = lastRecord(name, ds);
   if(!last){ const d = EX_DEFAULTS[name]||GENERIC_DEFAULT;
-    return {weight:d[0], reps:d[1], sets:d[2], why:'建议起步 suggested start'}; }
+    return {weight:scaleStartW(d[0], ds), reps:d[1], sets:d[2], why:'建议起步 suggested start'}; }
   const w = parseFloat(last.weight)||0, r = parseInt(last.reps)||0, s = parseInt(last.sets)||3;
   if(w > 0){
     if(r >= 12){ const inc = w >= 15 ? 2.5 : 1;
