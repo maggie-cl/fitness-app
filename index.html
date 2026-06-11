@@ -55,6 +55,9 @@ main{padding:12px; max-width:480px; margin:0 auto;}
 .addex{width:100%; padding:8px; margin-top:8px; border:1px dashed var(--border); background:none;
   border-radius:10px; color:var(--teal); font-size:13px; font-weight:600; cursor:pointer;}
 .swaprow{background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:9px; margin:4px 0 8px;}
+.exedit{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0 8px 32px; border-bottom:1px solid var(--border);}
+.exedit .exinputs input{width:52px; padding:8px 4px;}
+.exedit .exdel{background:none; border:1px dashed var(--border); border-radius:8px; padding:6px 8px; cursor:pointer;}
 .resttimer{display:flex; align-items:center; gap:8px; margin-top:10px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:10px; padding:8px 10px;}
 .resttimer .disp{flex:1; font-size:15px; font-weight:800; color:var(--teal-dark);}
 .resttimer button{padding:7px 14px; border:none; border-radius:8px; background:var(--teal); color:#fff; font-size:13px; font-weight:700; cursor:pointer;}
@@ -456,23 +459,26 @@ function renderToday(){
     h += `<div class="empty">今天休息，散步遛娃也算运动 🍃<br>Rest day — a stroller walk counts!</div>
           <button class="bigbtn ${w.done?'done':'ghost'}" onclick="toggleWorkoutDone()">${w.done?'✓ 今天动过了 Moved today':'🚶 散步了 / 动了一下 I moved today'}</button>`;
   } else {
-    h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 数值已按<b>渐进超负荷</b>预填：完成12次→下次加重；没到12次→下次+1次。按实际完成修改即可。Defaults pre-filled by double progression.</div>`;
+    if(checkinDays()<7) h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 数值已按<b>渐进超负荷</b>预填：完成12次→下次加重；没到12次→下次+1次。点动作可展开修改。</div>`;
     w.ex.forEach((e,i)=>{
       const last = lastRecord(e.name, ds), sg = suggestFor(e.name, ds);
-      h += `<div class="exrow">
-        <button class="excheck ${e.done?'on':''}" onclick="toggleEx(${i})">${e.done?'✓':''}</button>
+      const open = expIdx===i;
+      h += `<div class="exrow" onclick="expandEx(${i})" style="cursor:pointer">
+        <button class="excheck ${e.done?'on':''}" onclick="event.stopPropagation();toggleEx(${i})">${e.done?'✓':''}</button>
         <div class="exinfo"><div class="exname">${e.name}</div>
-          <div class="exlast">${last
-            ? `上次 <b>${last.weight||'-'}kg×${last.reps||'-'}×${last.sets||'-'}</b> · 建议 ${sg.why}`
-            : `建议起步 Suggested: ${sg.weight?sg.weight+'kg × ':''}${sg.reps} × ${sg.sets}`}</div></div>
-        <div class="exinputs">
-          <input type="number" inputmode="decimal" placeholder="kg" value="${e.weight}" onchange="setEx(${i},'weight',this.value)">
-          <span class="x">×</span>
-          <input type="number" inputmode="numeric" placeholder="次" value="${e.reps}" onchange="setEx(${i},'reps',this.value)">
-          <span class="x">×</span>
-          <input type="number" inputmode="numeric" placeholder="组" value="${e.sets}" onchange="setEx(${i},'sets',this.value)" style="width:34px">
-        </div>
-        <button class="exdel" onclick="delEx(${i})">×</button></div>`;
+          <div class="exlast"><b>${e.weight?e.weight+'kg × ':''}${e.reps||'-'} × ${e.sets||'-'}</b>${last?` · 上次 ${last.weight||'-'}×${last.reps||'-'}×${last.sets||'-'} · ${sg.why}`:' · 建议起步'}</div></div>
+        <span style="color:#cbd5e1;font-size:13px">${open?'▾':'▸'}</span></div>`;
+      if(open){
+        h += `<div class="exedit" onclick="event.stopPropagation()">
+          <div class="exinputs">
+            <input type="number" inputmode="decimal" placeholder="kg" value="${e.weight}" onchange="setEx(${i},'weight',this.value)">
+            <span class="x">×</span>
+            <input type="number" inputmode="numeric" placeholder="次" value="${e.reps}" onchange="setEx(${i},'reps',this.value)">
+            <span class="x">×</span>
+            <input type="number" inputmode="numeric" placeholder="组" value="${e.sets}" onchange="setEx(${i},'sets',this.value)" style="width:40px">
+          </div>
+          <button class="exdel" onclick="delEx(${i})" style="font-size:13px;color:var(--red)">🗑 删除/替换</button></div>`;
+      }
       if(swapIdx===i){
         const alts=(ALTS[e.name]||[]).filter(a=>!w.ex.some(x=>x.name===a));
         h += `<div class="swaprow"><div style="font-size:11px;color:var(--muted);margin-bottom:5px">🔄 换个同肌群的护膝动作？Replace with a same-muscle alternative:</div><div class="chips">` +
@@ -509,8 +515,8 @@ function renderToday(){
   let totP=0, totC=0, totV=0, totK=0, mealsDone=0;
   slots.forEach(m=>{ const ml=lg.meals[m.key];
     if(ml && ml.done){ totP+=(ml.protein||0)+snackP(ml); totC+=ml.carbs||0; totV+=ml.veg||0; totK+=mealKcal(ml); mealsDone++; } });
-  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">单位:拳 · 已按建议预填</span></h2>
-    <div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 用<b>拳头</b>目测：1拳≈100g（鸡胸1.5拳≈150g）。按建议吃就直接点 ✓。1 fist ≈ 100g; tap ✓ if you ate as suggested.</div>`;
+  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">单位:拳 (≈100g) · 已预填</span></h2>`;
+  if(checkinDays()<7) h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 用<b>拳头</b>目测：1拳≈100g（鸡胸1.5拳≈150g）。按建议吃就直接点 ✓。</div>`;
   slots.forEach(m=>{
     const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, mealDefault(m.key));
     h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time} · ≈${mealKcal(ml)} kcal</span></span>
@@ -553,24 +559,27 @@ function renderToday(){
 
   /* --- water card --- */
   const cups = lg.water||0, liters = Math.round(cups*CUP_L*10)/10;
+  /* --- daily log: water + weight + waist in one card --- */
   const nCups = Math.max(MAX_CUPS, Math.ceil(T.waterL/CUP_L)+1);
-  h += `<div class="card"><h2><span>💧 饮水 Water</span><span class="pill ${liters>=T.waterL?'done':''}">${liters>=T.waterL?'✓ 达标':'目标 '+T.waterL+'L'}</span></h2>
+  const wt = lg.weight, ws = lg.waist;
+  h += `<div class="card"><h2><span>📔 每日记录 Daily Log</span>
+    <span class="pill ${liters>=T.waterL&&wt?'done':''}">${liters?liters+'L':''}${liters&&wt?' · ':''}${wt?wt+'kg':''}${(liters||wt)?'':'水·体重·腰围'}</span></h2>
     <div class="cups">` +
     Array.from({length:nCups},(_,i)=>`<button class="cup ${i<cups?'full':''}" onclick="setWater(${i+1})">🥛</button>`).join('') +
-    `</div><div class="waterstat"><b>${liters} L</b> / ${T.waterL} L（一杯 0.8L，点杯子记录）</div></div>`;
-
-  /* --- weight & waist quick entry --- */
-  const wt = lg.weight, ws = lg.waist;
-  h += `<div class="card"><h2><span>⚖️ 体重·腰围 Body</span>${wt||ws?`<span class="pill done">✓ ${wt?wt+'kg':''}${wt&&ws?' · ':''}${ws?ws+'cm':''}</span>`:''}</h2>
+    `</div><div class="waterstat"><b>${liters} L</b> / ${T.waterL} L · 一杯0.8L</div>
+    <div style="border-top:1px solid var(--border);margin:10px 0"></div>
     <div class="weightinput">
       <input type="number" inputmode="decimal" step="0.1" placeholder="体重 kg" id="wInToday" value="${wt||''}">
       <input type="number" inputmode="decimal" step="0.5" placeholder="腰围 cm" id="waistInToday" value="${ws||''}">
       <button onclick="saveBody('Today')">记录</button></div>
-    <div style="font-size:11px;color:var(--muted)">体重每天早晨空腹称；腰围每周一次（肚脐水平），减脂增肌期它比体重更诚实 📉</div></div>`;
+    <div style="font-size:11px;color:var(--muted)">体重每天早晨空腹称；腰围每周一次（肚脐水平）</div></div>`;
 
   v.innerHTML = h;
 }
-let swapIdx=null;
+let swapIdx=null, expIdx=null;
+function expandEx(i){ expIdx = expIdx===i?null:i; swapIdx=null; renderToday(); }
+/* 资深用户(打卡≥7天)自动隐藏说明横幅 hide tip banners after 7 check-in days */
+function checkinDays(){ return Object.keys(db.logs).filter(ds=>{ const st=dayStatus(ds); return st.wReal||st.m; }).length; }
 function toggleEx(i){ const w=getWorkout(curDate); w.ex[i].done=!w.ex[i].done; save(); renderToday(); }
 function setEx(i,f,val){ const w=getWorkout(curDate); w.ex[i][f]=val; if(val) w.ex[i].done=true; save(); renderToday(); }
 function delEx(i){
@@ -878,8 +887,7 @@ function renderHistory(){
     let bg=''; if(!future&&inPlan){ if(st.complete)bg='full'; else if(st.any)bg='part'; }
     const d=parse(ds);
     h+=`<div class="cell ${cls} ${bg} ${future||!inPlan?'future':''}" onclick="openDay('${ds}')">
-      <span class="d">${d.getMonth()+1}/${d.getDate()}</span>
-      <span class="marks">${!future&&inPlan?(st.wReal?'💪':'')+(st.c?'🏃':'')+(st.m?'🍽':'')+(st.wt?'⚖️':''):''}</span></div>`;
+      <span class="d">${d.getMonth()+1}/${d.getDate()}</span></div>`;
     ds=addDays(ds,1);
   }
   h+=`</div><div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center">点任意日期可补打卡 Tap a day to backfill</div></div>`;
