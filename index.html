@@ -1055,9 +1055,14 @@ function openSchedFor(id){ schedPlanId=id; editingSched=true; renderSettings();
   setTimeout(()=>{ const c=[...document.querySelectorAll('#view-settings .card h2')].find(h=>h.innerText.includes('课表')); if(c) c.scrollIntoView({block:'start'}); }, 30); }
 function schedSet(wd,f,v){ const sc=curSched()[wd];
   if(f==='type'){
+    const wasRest = sc.type==='rest';
     sc.type=v;
     if(v==='rest'){ sc.name='休息 Rest'; sc.ex=[]; sc.cardio=null; }       // 休息日: 无氧=无, 有氧=0
-    else if(!sc.cardio) sc.cardio={min:30};                                // 改回训练日: 有氧默认30分钟
+    else {
+      if(!sc.cardio) sc.cardio={min:30};                                  // 训练日: 有氧默认30分钟
+      if(wasRest){ const fp=STRENGTH_PRESETS.find(x=>x.key==='full');     // 从休息变训练日: 默认全身, 可再改部位
+        sc.name=fp.name; sc.ex=fp.ex.slice(); }
+    }
     save(); renderSettings(); toast('✓ 课表已保存'); return;
   }
   else if(f==='name') sc.name=v;
