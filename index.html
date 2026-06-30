@@ -304,7 +304,7 @@ function addSnackOption(){
   }
   const m=getMeal('snack'); if(!m.items) m.items=[];
   if(!m.items.includes(opt.key)) m.items.push(opt.key);
-  save(); renderToday(); toast(`✓ ${name} ≈${opt.kcal} kcal`);
+  m.done=true; save(); renderToday(); renderHeader(); toast(`✓ ${name} ≈${opt.kcal} kcal`);
 }
 function removeSnack(){
   const lg=dayLog(curDate);
@@ -768,8 +768,9 @@ function toggleSnackItem(k){ const m=getMeal('snack');
   if(!m.items) m.items=[];
   const i=m.items.indexOf(k);
   if(i>=0) m.items.splice(i,1); else m.items.push(k);
-  save(); renderToday(); }
-function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,(m[f]||0)+d); save(); renderToday(); renderHeader(); }
+  m.done=m.items.length>0;  // 选了加餐即计入，全清空则取消
+  save(); renderToday(); renderHeader(); }
+function bumpAmt(mk,f,d){ const m=getMeal(mk); m[f]=Math.max(0,(m[f]||0)+d); m.done=true; save(); renderToday(); renderHeader(); }
 function setWater(n){ const lg=dayLog(curDate); lg.water = (lg.water===n)?n-1:n; save(); renderToday(); }
 function saveBody(suffix){
   const wEl=document.getElementById('wIn'+suffix), sEl=document.getElementById('waistIn'+suffix);
