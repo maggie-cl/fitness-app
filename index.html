@@ -916,7 +916,8 @@ function renderSettings(){
     if(editingPlanId!==p.id){
       h += `<div class="planrow ${isActive?'active':''}">
         <div class="r1"><b>${p.name}</b> ${status}<button class="exbtn" style="margin-left:auto" onclick="editingPlanId='${p.id}';renderSettings()">✏️</button></div>
-        <div class="r2">${p.startW||'?'} → ${p.endW||'?'} kg · ${p.weeks}周 · ${p.startDate} 起</div></div>`;
+        <div class="r2">${p.startW||'?'} → ${p.endW||'?'} kg · ${p.weeks}周 · ${p.startDate} 起</div>
+        <button class="exbtn" style="margin-top:8px;width:100%;text-align:left" onclick="openSchedFor('${p.id}')">📅 此计划课表：${schedSummary(p)} ›</button></div>`;
     } else {
       h += `<div class="planrow active">
         <div class="planset">
@@ -1044,6 +1045,9 @@ function delPlan(id){
 }
 function curSchedId(){ return (schedPlanId && db.plans.some(p=>p.id===schedPlanId)) ? schedPlanId : activePlan().id; }
 function curSched(){ return schedFor(db.plans.find(p=>p.id===curSchedId())); }
+function schedSummary(p){ const sc=schedFor(p); let train=0; [1,2,3,4,5,6,0].forEach(d=>{ if(sc[d].type!=='rest') train++; }); return `每周练 ${train} 天 + 有氧`; }
+function openSchedFor(id){ schedPlanId=id; editingSched=true; renderSettings();
+  setTimeout(()=>{ const c=[...document.querySelectorAll('#view-settings .card h2')].find(h=>h.innerText.includes('课表')); if(c) c.scrollIntoView({block:'start'}); }, 30); }
 function schedSet(wd,f,v){ const sc=curSched()[wd];
   if(f==='type'){
     sc.type=v;
