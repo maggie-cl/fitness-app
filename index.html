@@ -233,12 +233,14 @@ function presetOptionsHtml(sc){
 }
 /* 部位下拉即当天名称：匹配预设时选中预设，否则显示自定义 */
 function presetSelectHtml(d, sc){
+  const cardioOnly = sc.type!=='rest' && (!sc.ex || sc.ex.length===0);
   const matched = STRENGTH_PRESETS.some(p=>p.name===sc.name);
   let first='';
-  if(!matched) first = sc.type==='rest'
+  if(!matched && !cardioOnly) first = sc.type==='rest'
     ? '<option value="" selected>💪 选无氧部位…</option>'
     : `<option value="" selected disabled>✏️ ${sc.name}（自定义）</option>`;
-  return `<select class="nm" onchange="applyPreset(${d},this.value)">${first}${presetOptionsHtml(sc)}</select>`;
+  const cardioOpt = `<option value="__cardio" ${cardioOnly?'selected':''}>🏃 仅有氧（无无氧）</option>`;
+  return `<select class="nm" onchange="applyPreset(${d},this.value)">${first}${cardioOpt}${presetOptionsHtml(sc)}</select>`;
 }
 /* 每个计划自带课表，按日期取所属计划 each plan has its own schedule */
 function planForDate(ds){
@@ -535,12 +537,15 @@ function renderToday(){
   }
 
   /* --- workout card --- */
-  h += `<div class="card"><h2><span>${TYPE_ICON[sch.type]||'💪'} ${sch.name}</span>
-        <span class="pill ${w.done?'done':''}">${w.done?'✓ 已完成 Done':(sch.type==='rest'?'休息日':'待打卡')}</span></h2>`;
-  if(sch.where) h += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 8px">${sch.where}</div>`;
+  const cardioOnly = sch.type!=='rest' && (!sch.ex || sch.ex.length===0);
+  h += `<div class="card"><h2><span>${cardioOnly?'🏃':(TYPE_ICON[sch.type]||'💪')} ${sch.name}</span>
+        <span class="pill ${w.done?'done':''}">${w.done?'✓ 已完成 Done':(sch.type==='rest'?'休息日':cardioOnly?'有氧为主':'待打卡')}</span></h2>`;
+  if(sch.where && !cardioOnly) h += `<div style="font-size:12px;color:var(--muted);margin:-6px 0 8px">${sch.where}</div>`;
   if(sch.type==='rest'){
     h += `<div class="empty">今天休息，散步遛娃也算运动 🍃<br>Rest day — a stroller walk counts!</div>
           <button class="bigbtn ${w.done?'done':'ghost'}" onclick="toggleWorkoutDone()">${w.done?'✓ 今天动过了 Moved today':'🚶 散步了 / 动了一下 I moved today'}</button>`;
+  } else if(cardioOnly){
+    h += `<div class="empty">🏃 本阶段以有氧为主，今日无力量安排<br>Cardio-focused — no strength today.<br>完成下方有氧打卡即可 👇</div>`;
   } else {
     if(checkinDays()<7) h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 数值已按<b>渐进超负荷</b>预填：完成12次→下次加重；没到12次→下次+1次。点动作可展开修改。</div>`;
     w.ex.forEach((e,i)=>{
@@ -1059,6 +1064,9 @@ function schedSet(wd,f,v){ const sc=curSched()[wd];
   else if(f==='cardioMin'){ const n=parseInt(v)||0; sc.cardio=n>0?{min:n}:null; }
   save(); toast('✓ 课表已保存'); }
 function applyPreset(wd,key){ if(!key) return;
+  if(key==='__cardio'){ const sc=curSched()[wd];
+    sc.name='仅有氧 Cardio only'; sc.ex=[]; if(sc.type==='rest') sc.type='home'; if(!sc.cardio) sc.cardio={min:30};
+    save(); renderSettings(); toast('✓ 已设为仅有氧（无无氧）'); return; }
   const p=STRENGTH_PRESETS.find(x=>x.key===key); if(!p) return;
   const sc=curSched()[wd];
   sc.name=p.name; sc.ex=p.ex.slice();
@@ -1083,9 +1091,10 @@ function importData(inp){
 /* ================= history view ================= */
 function dayStatus(ds){
   const lg=db.logs[ds]; if(!lg) return {w:false,m:false,wt:false,any:false};
-  const wd=parse(ds).getDay(), isRest=SCHED(wd,ds).type==='rest';
-  const w=!!(lg.workout&&lg.workout.done)||(isRest); // rest days don't break streak
-  const wReal=!!(lg.workout&&lg.workout.done);
+  const wd=parse(ds).getDay(), sch=SCHED(wd,ds), isRest=sch.type==='rest';
+  const cardioOnly = !isRest && (!sch.ex || sch.ex.length===0); // 仅有氧天：靠有氧打卡算运动完成
+  const wReal = cardioOnly ? !!(lg.cardio&&lg.cardio.done) : !!(lg.workout&&lg.workout.done);
+  const w = wReal || isRest; // rest days don't break streak
   let mealsLogged=0;
   if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) mealsLogged++; });
   const m=mealsLogged>=2, wt=!!lg.weight, c=!!(lg.cardio&&lg.cardio.done);

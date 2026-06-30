@@ -1,4 +1,4 @@
-const CACHE = 'fitness6w-v30';
+const CACHE = 'fitness6w-v31';
 const ASSETS = ['.', 'index.html', 'manifest.json', 'icon-180.png', 'icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
