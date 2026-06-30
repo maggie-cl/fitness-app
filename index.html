@@ -240,7 +240,13 @@ function presetSelectHtml(d, sc){
     : `<option value="" selected disabled>✏️ ${sc.name}（自定义）</option>`;
   return `<select class="nm" onchange="applyPreset(${d},this.value)">${first}${presetOptionsHtml(sc)}</select>`;
 }
-function SCHED(wd){ return (db.schedule && db.schedule[wd]) || DEFAULT_SCHEDULE[wd]; }
+/* 每个计划自带课表，按日期取所属计划 each plan has its own schedule */
+function planForDate(ds){
+  for(const p of (db.plans||[])){ if(parse(p.startDate)<=parse(ds) && parse(planEnd(p))>=parse(ds)) return p; }
+  return activePlan();
+}
+function schedFor(p){ if(p && !p.schedule) p.schedule=JSON.parse(JSON.stringify(DEFAULT_SCHEDULE)); return (p&&p.schedule)||DEFAULT_SCHEDULE; }
+function SCHED(wd, ds){ const p = ds ? planForDate(ds) : activePlan(); const sc=(p&&p.schedule)||DEFAULT_SCHEDULE; return sc[wd]||DEFAULT_SCHEDULE[wd]; }
 const CARDIO_TYPES = ['快走 Brisk Walk','爬坡 Incline Walk','爬楼 Stair Climb','HIIT','遛娃散步 Stroller Walk'];
 function cardioOptions(){ return CARDIO_TYPES.concat(db.customCardio||[]); }
 const MEALS = [
@@ -317,7 +323,7 @@ function dayBurn(ds){
   const bmr = 10*kg + 6.25*ht - 5*ag + (s.sex==='M'?5:-161);
   const base = Math.round(bmr*(s.activity||1.4));            // 基础代谢+日常活动
   const lg = db.logs[ds]||{};
-  const strength = (lg.workout&&lg.workout.done&&SCHED(parse(ds).getDay()).type!=='rest') ? Math.round(4.5*kg*0.5) : 0; // 力量约4.5MET×30min
+  const strength = (lg.workout&&lg.workout.done&&SCHED(parse(ds).getDay(),ds).type!=='rest') ? Math.round(4.5*kg*0.5) : 0; // 力量约4.5MET×30min
   const cardio = (lg.cardio&&lg.cardio.done) ? Math.round(metFor(lg.cardio.type)*kg*(lg.cardio.min||30)/60) : 0;
   return {base, strength, cardio, total: base+strength+cardio};
 }
@@ -359,13 +365,19 @@ function applySettings(){
   const ap = activePlan();
   PLAN_START = ap.startDate; PLAN_WEEKS = ap.weeks; PLAN_END = addDays(ap.startDate, ap.weeks*7-1);
   W_START = parseFloat(ap.startW)||0; W_END = parseFloat(ap.endW)||0;
-  if(!db.schedule) db.schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
   if(!db.customCardio) db.customCardio = [];
   if(!db.customSnacks) db.customSnacks = [];
-  // migration: WFH strength moved 8:00 → 12:00; lower-day renamed
-  [3,5].forEach(d=>{ if(db.schedule[d] && db.schedule[d].where==='8:00 · 家 Home') db.schedule[d].where='12:00 · 家 Home'; });
-  Object.keys(db.schedule).forEach(d=>{ if(db.schedule[d].name==='下肢 Lower (护膝版)') db.schedule[d].name='下肢/臀腿 Lower & Glutes (护膝)';
-    if(db.schedule[d].name==='臀腿 Glutes Focus') db.schedule[d].name='下肢/臀腿 Lower & Glutes (护膝)'; });
+  // migrate global schedule → per-plan: old db.schedule goes to plan 1, others get default
+  db.plans.forEach((p,i)=>{
+    if(!p.schedule) p.schedule = (i===0 && db.schedule) ? db.schedule : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+  });
+  if(db.schedule) delete db.schedule;
+  // migration on each plan's schedule: WFH time, day rename
+  db.plans.forEach(p=>{ const sch=p.schedule;
+    [3,5].forEach(d=>{ if(sch[d] && sch[d].where==='8:00 · 家 Home') sch[d].where='12:00 · 家 Home'; });
+    Object.keys(sch).forEach(d=>{ if(sch[d].name==='下肢 Lower (护膝版)') sch[d].name='下肢/臀腿 Lower & Glutes (护膝)';
+      if(sch[d].name==='臀腿 Glutes Focus') sch[d].name='下肢/臀腿 Lower & Glutes (护膝)'; });
+  });
 }
 /* 活跃计划：含今天的；否则最近已开始的；否则最早的未来计划 active plan = contains today, else most recent, else earliest future */
 function activePlan(){
@@ -490,7 +502,7 @@ function lastRecord(exName, beforeDs){
 function getWorkout(ds){
   const lg = dayLog(ds);
   if(!lg.workout){
-    const sch = SCHED(parse(ds).getDay());
+    const sch = SCHED(parse(ds).getDay(), ds);
     // sticky preference: 沿用上一次同部位打卡的动作清单 reuse last checked-in exercise list for this focus
     let names = sch.ex;
     let d = addDays(ds,-1);
@@ -510,7 +522,7 @@ function getWorkout(ds){
 }
 function renderToday(){
   const v = document.getElementById('view-today');
-  const ds = curDate, wd = parse(ds).getDay(), sch = SCHED(wd);
+  const ds = curDate, wd = parse(ds).getDay(), sch = SCHED(wd, ds);
   const lg = dayLog(ds), w = getWorkout(ds);
   let h = '';
 
@@ -651,7 +663,7 @@ function renderToday(){
 
   v.innerHTML = h;
 }
-let swapIdx=null, expIdx=null, editingProfile=false, editingSched=false, editingPlanId=null, calExpanded=false;
+let swapIdx=null, expIdx=null, editingProfile=false, editingSched=false, editingPlanId=null, calExpanded=false, schedPlanId=null;
 function expandEx(i){ expIdx = expIdx===i?null:i; swapIdx=null; renderToday(); }
 /* 资深用户(打卡≥7天)自动隐藏说明横幅 hide tip banners after 7 check-in days */
 function checkinDays(){ return Object.keys(db.logs).filter(ds=>{ const st=dayStatus(ds); return st.wReal||st.m; }).length; }
@@ -684,7 +696,7 @@ function getMeal(k){ const lg=dayLog(curDate); if(!lg.meals) lg.meals={};
   if(!lg.meals[k]) lg.meals[k]=Object.assign({proteins:[], done:false}, mealDefault(k));
   return lg.meals[k]; }
 function getCardio(ds){ const lg=dayLog(ds);
-  if(!lg.cardio){ const sc=SCHED(parse(ds).getDay()); lg.cardio={done:false, type:CARDIO_TYPES[0], min:(sc.cardio&&sc.cardio.min)||30}; }
+  if(!lg.cardio){ const sc=SCHED(parse(ds).getDay(),ds); lg.cardio={done:false, type:CARDIO_TYPES[0], min:(sc.cardio&&sc.cardio.min)||30}; }
   return lg.cardio; }
 function setCardio(f,v){ const c=getCardio(curDate);
   if(f==='min') c.min=Math.max(5, v); else c.type=v;
@@ -921,14 +933,24 @@ function renderSettings(){
     }
   });
   h += `<button class="addex" onclick="addPlan()">＋ 新计划 New plan（不同时间段）</button></div>`;
+  // 课表卡：多计划时顶部可切换正在查看/编辑哪个计划的课表
+  const scId=curSchedId(), scName=(db.plans.find(p=>p.id===scId)||{}).name||'';
+  const planPicker = db.plans.length>1
+    ? `<select onchange="schedPlanId=this.value;renderSettings()" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:8px;max-width:46%">`
+      + db.plans.slice().sort((a,b)=>parse(a.startDate)-parse(b.startDate)).map(p=>`<option value="${p.id}" ${p.id===scId?'selected':''}>${p.name}${p.id===activePlan().id?' ·当前':''}</option>`).join('')
+      + `</select>`
+    : '';
+  const curScheduleObj = curSched();
   if(!editingSched){
-    h += `<div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><button class="exbtn" onclick="editingSched=true;renderSettings()">✏️ 编辑 Edit</button></h2>` +
-      [1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
+    h += `<div class="card"><h2><span>📅 每周课表 Schedule</span><span style="display:flex;gap:6px;align-items:center">${planPicker}<button class="exbtn" onclick="editingSched=true;renderSettings()">✏️ 编辑</button></span></h2>` +
+      (db.plans.length>1?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">每个计划可有不同课表 · 当前显示：<b>${scName}</b></div>`:'') +
+      [1,2,3,4,5,6,0].map(d=>{ const sc=curScheduleObj[d];
         return `<div class="wkrow"><span>${['周日','周一','周二','周三','周四','周五','周六'][d]}</span><b>${TYPE_ICON[sc.type]||''} ${sc.type==='rest'?'休息 Rest':sc.name}${sc.cardio?` · 🏃${sc.cardio.min}min`:''}</b></div>`;
       }).join('') + `</div>`;
   } else {
-  h += `<div class="card"><h2><span>📅 每周课表 Weekly Schedule</span><span class="sub">类型/部位/动作/有氧</span></h2>
-    ${[1,2,3,4,5,6,0].map(d=>{ const sc=db.schedule[d];
+  h += `<div class="card"><h2><span>📅 编辑课表 Schedule</span>${planPicker}</h2>
+    ${db.plans.length>1?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px">正在编辑：<b>${scName}</b>（护膝动作）</div>`:''}
+    ${[1,2,3,4,5,6,0].map(d=>{ const sc=curScheduleObj[d];
       return `<div class="schedrow">
         <div class="r1"><span class="day">${['周日','周一','周二','周三','周四','周五','周六'][d]}</span>
           <select onchange="schedSet(${d},'type',this.value)">
@@ -1020,7 +1042,9 @@ function delPlan(id){
   db.plans=db.plans.filter(p=>p.id!==id); editingPlanId=null;
   applySettings(); save(); renderHeader(); renderSettings(); toast('✓ 已删除');
 }
-function schedSet(wd,f,v){ const sc=db.schedule[wd];
+function curSchedId(){ return (schedPlanId && db.plans.some(p=>p.id===schedPlanId)) ? schedPlanId : activePlan().id; }
+function curSched(){ return schedFor(db.plans.find(p=>p.id===curSchedId())); }
+function schedSet(wd,f,v){ const sc=curSched()[wd];
   if(f==='type'){
     sc.type=v;
     if(v==='rest'){ sc.name='休息 Rest'; sc.ex=[]; sc.cardio=null; }       // 休息日: 无氧=无, 有氧=0
@@ -1032,12 +1056,12 @@ function schedSet(wd,f,v){ const sc=db.schedule[wd];
   save(); toast('✓ 课表已保存'); }
 function applyPreset(wd,key){ if(!key) return;
   const p=STRENGTH_PRESETS.find(x=>x.key===key); if(!p) return;
-  const sc=db.schedule[wd];
+  const sc=curSched()[wd];
   sc.name=p.name; sc.ex=p.ex.slice();
   if(sc.type==='rest') sc.type='gym';
   if(!sc.cardio) sc.cardio={min:30};
   save(); renderSettings(); toast('✓ 已应用 '+p.name); }
-function editEx(wd){ const sc=db.schedule[wd];
+function editEx(wd){ const sc=curSched()[wd];
   const n=prompt('动作列表（逗号分隔）Exercises (comma-separated):', sc.ex.join(', '));
   if(n!==null){ sc.ex=n.split(/[,，]/).map(x=>x.trim()).filter(Boolean); save(); renderSettings(); toast('✓ 动作已更新'); } }
 function exportData(){
@@ -1055,7 +1079,7 @@ function importData(inp){
 /* ================= history view ================= */
 function dayStatus(ds){
   const lg=db.logs[ds]; if(!lg) return {w:false,m:false,wt:false,any:false};
-  const wd=parse(ds).getDay(), isRest=SCHED(wd).type==='rest';
+  const wd=parse(ds).getDay(), isRest=SCHED(wd,ds).type==='rest';
   const w=!!(lg.workout&&lg.workout.done)||(isRest); // rest days don't break streak
   const wReal=!!(lg.workout&&lg.workout.done);
   let mealsLogged=0;
@@ -1105,7 +1129,7 @@ function renderHistory(){
     const T=targets();
     let workouts=0, cDays=0, pDays=0, wDays=0, weights=[];
     for(let i=0;i<7;i++){ const ds2=addDays(start,i); const lg=db.logs[ds2]; if(!lg)continue;
-      if(lg.workout&&lg.workout.done&&SCHED(parse(ds2).getDay()).type!=='rest') workouts++;
+      if(lg.workout&&lg.workout.done&&SCHED(parse(ds2).getDay(),ds2).type!=='rest') workouts++;
       if(lg.cardio&&lg.cardio.done) cDays++;
       let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=(ml.protein||0)+snackP(ml); });
       if(tp>=T.protein) pDays++;
