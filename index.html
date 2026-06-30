@@ -599,8 +599,8 @@ function renderToday(){
   let totP=0, totC=0, totV=0, totK=0, mealsDone=0;
   slots.forEach(m=>{ const ml=lg.meals[m.key];
     if(ml && ml.done){ totP+=(ml.protein||0)+snackP(ml); totC+=ml.carbs||0; totV+=ml.veg||0; totK+=mealKcal(ml); mealsDone++; } });
-  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">单位:拳 (≈100g) · 已预填</span></h2>`;
-  if(checkinDays()<7) h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 用<b>拳头</b>目测：1拳≈100g（鸡胸1.5拳≈150g）。按建议吃就直接点 ✓。</div>`;
+  h += `<div class="card"><h2><span>🍽️ 饮食打卡 Meals</span><span class="sub">单位:克 g · 已预填</span></h2>`;
+  if(checkinDays()<7) h += `<div style="font-size:11px;color:var(--muted);background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:4px">💡 记<b>食物重量</b>（如鸡胸150g、熟米饭150g）。按建议吃就直接点 ✓。1拳≈100g 可估算。</div>`;
   slots.forEach(m=>{
     const ml = lg.meals[m.key] || Object.assign({proteins:[], done:false}, mealDefault(m.key));
     h += `<div class="mealslot"><div class="mealhead"><span class="mname">${m.name} <span class="mtime">${m.time} · ≈${mealKcal(ml)} kcal</span></span>
@@ -615,21 +615,21 @@ function renderToday(){
       return;
     }
     h += `<div class="amounts">
-        <div class="amt"><div class="lbl">蛋白质 Protein (拳)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','protein',-50)">−</button><span class="val">${fist(ml.protein||0)}</span><button onclick="bumpAmt('${m.key}','protein',50)">＋</button></div></div>
-        <div class="amt"><div class="lbl">碳水 Carbs (拳)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','carbs',-50)">−</button><span class="val">${fist(ml.carbs||0)}</span><button onclick="bumpAmt('${m.key}','carbs',50)">＋</button></div></div>
-        <div class="amt"><div class="lbl">蔬菜 Veg (拳)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','veg',-50)">−</button><span class="val">${fist(ml.veg||0)}</span><button onclick="bumpAmt('${m.key}','veg',50)">＋</button></div></div>
+        <div class="amt"><div class="lbl">蛋白质 Protein (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','protein',-25)">−</button><span class="val">${ml.protein||0}</span><button onclick="bumpAmt('${m.key}','protein',25)">＋</button></div></div>
+        <div class="amt"><div class="lbl">碳水 Carbs (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','carbs',-25)">−</button><span class="val">${ml.carbs||0}</span><button onclick="bumpAmt('${m.key}','carbs',25)">＋</button></div></div>
+        <div class="amt"><div class="lbl">蔬菜 Veg (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','veg',-25)">−</button><span class="val">${ml.veg||0}</span><button onclick="bumpAmt('${m.key}','veg',25)">＋</button></div></div>
       </div></div>`;
   });
   if(!snackOn) h += `<button class="addex" onclick="addSnack()">＋ 今天有加餐 Add snack today</button>`;
   const T = targets();
   const pOK = totP>=T.protein, cOK = totC<=T.carbsMax, vOK = totV>=T.veg, kOK = mealsDone>0 && totK<=T.kcalMax;
   h += `<div class="daytotals">
-    <div class="tot ${pOK?'ok':''}">蛋白 ≥${fist(T.protein)}拳<b>${fist(totP)} ${pOK?'✓':''}</b></div>
-    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${fist(T.carbsMax)}拳<b>${fist(totC)} ${cOK&&mealsDone>0?'✓':''}</b></div>
-    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${fist(T.veg)}拳<b>${fist(totV)} ${vOK?'✓':''}</b></div>
+    <div class="tot ${pOK?'ok':''}">蛋白 ≥${T.protein}g<b>${totP} ${pOK?'✓':''}</b></div>
+    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${T.carbsMax}g<b>${totC} ${cOK&&mealsDone>0?'✓':''}</b></div>
+    <div class="tot ${vOK?'ok':''}">蔬菜 ≥${T.veg}g<b>${totV} ${vOK?'✓':''}</b></div>
     <div class="tot ${kOK?'ok':''}">热量 ≤${T.kcalMax}<b>${totK} ${kOK?'✓':''}</b></div>
   </div>
   <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">合计只算已打卡 ✓ 的餐 · 热量为估算，未含烹饪油（约 +100~150 kcal）</div></div>`;
@@ -886,7 +886,7 @@ function renderSettings(){
   if(profDone && !editingProfile){
     h += `<div class="card"><h2><span>👤 个人资料 Profile</span><button class="exbtn" onclick="editingProfile=true;renderSettings()">✏️ 编辑 Edit</button></h2>
       <div class="wkrow"><span>${s.name||'—'}</span><b>${s.sex==='M'?'男 M':'女 F'} · ${s.age}岁 · ${s.heightCm}cm · ${ACT[s.activity]||''}</b></div>
-      <div class="wkrow"><span>📌 每日目标 Targets</span><b>≤${T.kcalMax} kcal · 蛋白≥${fist(T.protein)}拳 · 水${T.waterL}L</b></div></div>`;
+      <div class="wkrow"><span>📌 每日目标 Targets</span><b>≤${T.kcalMax} kcal · 蛋白≥${T.protein}g · 水${T.waterL}L</b></div></div>`;
   } else {
     h += `<div class="card"><h2><span>👤 个人资料 Profile</span><span class="sub">全局，所有计划共用</span></h2>
       <div class="planset">
