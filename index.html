@@ -1146,9 +1146,15 @@ function renderHistory(){
     any=true;
     const end=addDays(start,6);
     const T=targets();
-    let workouts=0, cDays=0, pDays=0, wDays=0, weights=[];
-    for(let i=0;i<7;i++){ const ds2=addDays(start,i); const lg=db.logs[ds2]; if(!lg)continue;
-      if(lg.workout&&lg.workout.done&&SCHED(parse(ds2).getDay(),ds2).type!=='rest') workouts++;
+    let workouts=0, cDays=0, pDays=0, wDays=0, weights=[], plannedS=0, plannedC=0;
+    for(let i=0;i<7;i++){ const ds2=addDays(start,i);
+      const sch=SCHED(parse(ds2).getDay(),ds2);                          // 该天所属计划的课表
+      const isStrengthDay = sch.type!=='rest' && sch.ex && sch.ex.length>0; // 排除休息和仅有氧
+      const isCardioDay = !!sch.cardio;
+      if(isStrengthDay) plannedS++;
+      if(isCardioDay) plannedC++;
+      const lg=db.logs[ds2]; if(!lg)continue;
+      if(lg.workout&&lg.workout.done&&isStrengthDay) workouts++;
       if(lg.cardio&&lg.cardio.done) cDays++;
       let tp=0; if(lg.meals) MEALS.forEach(m=>{ const ml=lg.meals[m.key]; if(ml&&ml.done) tp+=(ml.protein||0)+snackP(ml); });
       if(tp>=T.protein) pDays++;
@@ -1164,8 +1170,8 @@ function renderHistory(){
     }
     const delta=avgW&&prevW?Math.round((avgW-prevW)*10)/10:null;
     h+=`<div class="card weekcard"><h2><span>第 ${wk} 周 Week ${wk}</span><span class="sub">${start.slice(5)} ~ ${end.slice(5)}</span></h2>
-      <div class="wkrow"><span>🏋️ 无氧 Strength</span><b>${workouts} / 5</b></div>
-      <div class="wkrow"><span>🏃 有氧 Cardio</span><b>${cDays} / 5</b></div>
+      ${plannedS>0?`<div class="wkrow"><span>🏋️ 无氧 Strength</span><b>${workouts} / ${plannedS}</b></div>`:''}
+      ${plannedC>0?`<div class="wkrow"><span>🏃 有氧 Cardio</span><b>${cDays} / ${plannedC}</b></div>`:''}
       <div class="wkrow"><span>⚖️ 周均体重 Avg weight</span><b>${avgW??'–'} kg ${delta!==null?`<span style="color:${delta<=0?'var(--green)':'var(--red)'}">(${delta>0?'+':''}${delta})</span>`:''}</b></div>
       <div class="wkrow"><span>🥩 蛋白达标天数 Protein days</span><b>${pDays} / 7</b></div>
       <div class="wkrow"><span>💧 饮水达标天数 Water days</span><b>${wDays} / 7</b></div></div>`;
