@@ -617,10 +617,10 @@ function renderToday(){
     h += `<div class="amounts">
         <div class="amt"><div class="lbl">蛋白质 Protein (g)</div><div class="ctl">
           <button onclick="bumpAmt('${m.key}','protein',-25)">−</button><span class="val">${ml.protein||0}</span><button onclick="bumpAmt('${m.key}','protein',25)">＋</button></div></div>
-        <div class="amt"><div class="lbl">碳水 Carbs (g)</div><div class="ctl">
-          <button onclick="bumpAmt('${m.key}','carbs',-25)">−</button><span class="val">${ml.carbs||0}</span><button onclick="bumpAmt('${m.key}','carbs',25)">＋</button></div></div>
         <div class="amt"><div class="lbl">蔬菜 Veg (g)</div><div class="ctl">
           <button onclick="bumpAmt('${m.key}','veg',-25)">−</button><span class="val">${ml.veg||0}</span><button onclick="bumpAmt('${m.key}','veg',25)">＋</button></div></div>
+        <div class="amt"><div class="lbl">碳水 Carbs (g)</div><div class="ctl">
+          <button onclick="bumpAmt('${m.key}','carbs',-25)">−</button><span class="val">${ml.carbs||0}</span><button onclick="bumpAmt('${m.key}','carbs',25)">＋</button></div></div>
       </div></div>`;
   });
   if(!snackOn) h += `<button class="addex" onclick="addSnack()">＋ 今天有加餐 Add snack today</button>`;
@@ -628,8 +628,8 @@ function renderToday(){
   const pOK = totP>=T.protein, cOK = totC<=T.carbsMax, vOK = totV>=T.veg, kOK = mealsDone>0 && totK<=T.kcalMax;
   h += `<div class="daytotals">
     <div class="tot ${pOK?'ok':''}">蛋白 ≥${T.protein}g<b>${totP} ${pOK?'✓':''}</b></div>
-    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${T.carbsMax}g<b>${totC} ${cOK&&mealsDone>0?'✓':''}</b></div>
     <div class="tot ${vOK?'ok':''}">蔬菜 ≥${T.veg}g<b>${totV} ${vOK?'✓':''}</b></div>
+    <div class="tot ${cOK&&mealsDone>0?'ok':''}">碳水 ≤${T.carbsMax}g<b>${totC} ${cOK&&mealsDone>0?'✓':''}</b></div>
     <div class="tot ${kOK?'ok':''}">热量 ≤${T.kcalMax}<b>${totK} ${kOK?'✓':''}</b></div>
   </div>
   <div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center">合计只算已打卡 ✓ 的餐 · 热量为估算，未含烹饪油（约 +100~150 kcal）</div></div>`;
